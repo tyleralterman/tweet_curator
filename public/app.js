@@ -1,0 +1,859 @@
+/**
+ * Tweet Curator - Content Directory App
+ */
+
+// State
+let state = {
+    tweets: [],
+    tags: { topic: [], pattern: [], use: [], custom: [] },
+    allTags: [],
+    stats: {},
+    pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
+    filters: {
+        search: '',
+        type: '',
+        length: '',
+        // quality: '', REMOVED
+        swipe: '',
+        tag: '',
+        excludeRetweets: true,
+        excludeReplies: true,
+        excludeThreads: true
+    },
+    sort: { by: 'created_at', order: 'desc' },
+    selectedTweet: null
+};
+
+// DOM Elements
+const elements = {
+    tweetGrid: document.getElementById('tweetGrid'),
+    searchInput: document.getElementById('searchInput'),
+    searchBtn: document.getElementById('searchBtn'),
+    filterType: document.getElementById('filterType'),
+    filterLength: document.getElementById('filterLength'),
+    filterQuality: null, // REMOVED
+    filterSwipe: document.getElementById('filterSwipe'),
+    excludeRetweets: document.getElementById('excludeRetweets'),
+    filterSwipe: document.getElementById('filterSwipe'),
+    excludeRetweets: document.getElementById('excludeRetweets'),
+    excludeReplies: document.getElementById('excludeReplies'),
+    excludeThreads: document.getElementById('excludeThreads'),
+    sortBy: document.getElementById('sortBy'),
+    sortOrder: document.getElementById('sortOrder'),
+    prevPage: document.getElementById('prevPage'),
+    nextPage: document.getElementById('nextPage'),
+    pageInfo: document.getElementById('pageInfo'),
+    resultCount: document.getElementById('resultCount'),
+    clearFilters: document.getElementById('clearFilters'),
+    topicTags: document.getElementById('topicTags'),
+    patternTags: document.getElementById('patternTags'),
+    useTags: document.getElementById('useTags'),
+    modal: document.getElementById('tweetModal'),
+    modalBody: document.getElementById('modalBody'),
+    modalClose: document.querySelector('.modal-close'),
+    importBtn: document.getElementById('importBtn'),
+    archiveInput: document.getElementById('archiveInput'),
+    importStatus: document.getElementById('importStatus'),
+    // Stats
+    totalTweets: document.getElementById('totalTweets'),
+    superlikedCount: document.getElementById('superlikedCount'),
+    likedCount: document.getElementById('likedCount'),
+    reviewedCount: document.getElementById('reviewedCount')
+};
+
+// ============================================
+// API Functions
+// ============================================
+
+async function fetchTweets() {
+    const params = new URLSearchParams({
+        page: state.pagination.page,
+        limit: state.pagination.limit,
+        sort: state.sort.by,
+        order: state.sort.order,
+        search: state.filters.search,
+        type: state.filters.type,
+        length: state.filters.length,
+        // quality removed
+        swipe: state.filters.swipe,
+        tag: state.filters.tag,
+        excludeRetweets: state.filters.excludeRetweets,
+        excludeReplies: state.filters.excludeReplies,
+        excludeThreads: state.filters.excludeThreads
+    });
+
+    try {
+        const response = await fetch(`/api/tweets?${params}`);
+        const data = await response.json();
+        state.tweets = data.tweets;
+        state.pagination = data.pagination;
+        renderTweets();
+        updatePaginationUI();
+    } catch (err) {
+        console.error('Error fetching tweets:', err);
+        elements.tweetGrid.innerHTML = `
+            <div class="empty-state">
+                <h3>Error loading tweets</h3>
+                <p>${err.message}</p>
+            </div>
+        `;
+    }
+}
+
+async function fetchTags() {
+    try {
+        const response = await fetch('/api/tags');
+        state.tags = await response.json();
+        state.allTags = [
+            ...state.tags.topic,
+            ...state.tags.pattern,
+            ...(state.tags.use || []),
+            ...state.tags.custom
+        ];
+        renderTags();
+    } catch (err) {
+        console.error('Error fetching tags:', err);
+    }
+}
+
+async function fetchStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+        state.stats = data.stats;
+        updateStatsUI();
+    } catch (err) {
+        console.error('Error fetching stats:', err);
+    }
+}
+
+async function updateTweet(tweetId, updates) {
+    try {
+        await fetch(`/api/tweets/${tweetId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+        // Refresh data
+        fetchTweets();
+        fetchStats();
+    } catch (err) {
+        console.error('Error updating tweet:', err);
+    }
+}
+
+async function addTag(tweetId, tagName, category = 'custom') {
+    try {
+        await fetch(`/api/tweets/${tweetId}/tags`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagName, tagCategory: category })
+        });
+        fetchTags();
+        return true;
+    } catch (err) {
+        console.error('Error adding tag:', err);
+        return false;
+    }
+}
+
+async function removeTag(tweetId, tagName) {
+    try {
+        await fetch(`/api/tweets/${tweetId}/tags/${tagName}`, {
+            method: 'DELETE'
+        });
+        fetchTags();
+        return true;
+    } catch (err) {
+        console.error('Error removing tag:', err);
+        return false;
+    }
+}
+
+async function uploadArchive(file) {
+    const formData = new FormData();
+    formData.append('archive', file);
+
+    elements.importBtn.disabled = true;
+    elements.importStatus.textContent = 'Uploading and importing...';
+    elements.importStatus.className = 'import-status';
+
+    try {
+        const response = await fetch('/api/import/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            elements.importStatus.textContent = '✓ Import complete!';
+            elements.importStatus.className = 'import-status success';
+            // Refresh data
+            fetchTweets();
+            fetchStats();
+            fetchTags();
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (err) {
+        elements.importStatus.textContent = `✗ ${err.message}`;
+        elements.importStatus.className = 'import-status error';
+    } finally {
+        elements.importBtn.disabled = false;
+    }
+}
+
+// ============================================
+// Render Functions
+// ============================================
+
+function renderTweets() {
+    if (state.tweets.length === 0) {
+        elements.tweetGrid.innerHTML = `
+            <div class="empty-state">
+                <h3>No tweets found</h3>
+                <p>Try adjusting your filters</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.tweetGrid.innerHTML = state.tweets.map(tweet => {
+        const swipeClass = tweet.swipe_status === 'superlike' ? 'superliked' :
+            tweet.swipe_status === 'like' ? 'liked' : '';
+
+        const swipeBadge = tweet.swipe_status === 'superlike' ? '⭐' :
+            tweet.swipe_status === 'like' ? '❤️' :
+                tweet.swipe_status === 'dislike' ? '👎' :
+                    tweet.swipe_status === 'review_later' ? '🔄' : '';
+
+        // In createTweetElement:
+        // Quality Badge REMOVED
+        const qualityBadge = '';
+
+        // In openTweetModal:
+        // Quality Buttons REMOVED
+        /*
+                    <h4>Quality Rating</h4>
+                    <div class="quality-buttons">
+                        ...
+                    </div>
+        */
+
+        const date = new Date(tweet.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+
+        const tagsHtml = tweet.tags.slice(0, 3).map(tag =>
+            `<span class="tweet-tag ${tag.category}">${tag.name}</span>`
+        ).join('');
+
+        // Media preview
+        const mediaHtml = tweet.media_url ? `
+            <div class="tweet-media">
+                <img src="${tweet.media_url}" alt="Media" loading="lazy" onerror="this.parentElement.style.display='none'">
+            </div>
+        ` : '';
+
+        // Tweet URL link
+        const tweetLink = tweet.tweet_url ? `
+            <a href="${tweet.tweet_url}" target="_blank" class="tweet-link" onclick="event.stopPropagation()">View on X →</a>
+        ` : '';
+
+        // Quoted Tweet
+        let quotedHtml = '';
+        if (tweet.quoted_tweet_id) {
+            if (tweet.quoted_text) {
+                const quotedMedia = tweet.quoted_media ? `
+                    <div class="quoted-media">
+                        <img src="${tweet.quoted_media}" loading="lazy" alt="Quoted Media" onerror="this.parentElement.style.display='none'">
+                    </div>
+                ` : '';
+
+                quotedHtml = `
+                    <div class="quoted-tweet">
+                        <div class="quoted-user">Quoted Tweet</div>
+                        <div class="quoted-text">${linkify(tweet.quoted_text)}</div>
+                        ${quotedMedia}
+                    </div>
+                `;
+            } else {
+                quotedHtml = `
+                    <div class="quoted-tweet">
+                        <div class="quoted-user">Quoted Tweet</div>
+                        <a href="https://x.com/i/web/status/${tweet.quoted_tweet_id}" target="_blank" onclick="event.stopPropagation()">View Quoted Tweet →</a>
+                    </div>
+                `;
+            }
+        }
+
+        return `
+            <div class="tweet-card ${swipeClass}" data-id="${tweet.id}">
+                <div class="tweet-header">
+                    <div class="tweet-badges">
+                        ${swipeBadge ? `<span class="swipe-badge">${swipeBadge}</span>` : ''}
+                        ${qualityBadge}
+                    </div>
+                </div>
+                <div class="tweet-text">${linkify(tweet.full_text)}</div>
+                ${mediaHtml}
+                ${quotedHtml}
+                <div class="tweet-footer">
+                    <div class="tweet-meta">
+                        <span>${date}</span>
+                        <div class="tweet-stats">
+                            <span class="tweet-stat">❤️ ${tweet.favorite_count}</span>
+                            <span class="tweet-stat">🔁 ${tweet.retweet_count}</span>
+                        </div>
+                    </div>
+                    <div class="tweet-tags">${tagsHtml}</div>
+                    ${tweetLink}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add click handlers
+    document.querySelectorAll('.tweet-card').forEach(card => {
+        card.addEventListener('click', () => openTweetModal(card.dataset.id));
+    });
+}
+
+function renderTags() {
+    // Topic tags
+    elements.topicTags.innerHTML = state.tags.topic.map(tag => `
+        <button class="tag-btn ${state.filters.tag === tag.name ? 'active' : ''}" 
+                data-tag="${tag.name}"
+                style="border-color: ${tag.color}">
+            ${tag.name} <span class="count">${tag.tweet_count}</span>
+        </button>
+    `).join('');
+
+    // Pattern tags
+    elements.patternTags.innerHTML = state.tags.pattern.map(tag => `
+        <button class="tag-btn ${state.filters.tag === tag.name ? 'active' : ''}" 
+                data-tag="${tag.name}"
+                style="border-color: ${tag.color}">
+            ${tag.name} <span class="count">${tag.tweet_count}</span>
+        </button>
+    `).join('');
+
+    // Use tags
+    if (elements.useTags && state.tags.use) {
+        elements.useTags.innerHTML = state.tags.use.map(tag => `
+            <button class="tag-btn use ${state.filters.tag === tag.name ? 'active' : ''}" 
+                    data-tag="${tag.name}"
+                    style="border-color: ${tag.color}">
+                ${tag.name} <span class="count">${tag.tweet_count}</span>
+            </button>
+        `).join('');
+    }
+
+    // Add click handlers
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tagName = btn.dataset.tag;
+            state.filters.tag = state.filters.tag === tagName ? '' : tagName;
+            state.pagination.page = 1;
+            fetchTweets();
+            renderTags();
+        });
+    });
+}
+
+function updateStatsUI() {
+    const s = state.stats;
+    elements.totalTweets.textContent = formatNumber(s.total - (s.retweets || 0));
+    elements.superlikedCount.textContent = formatNumber(s.superliked || 0);
+    elements.likedCount.textContent = formatNumber(s.liked || 0);
+    elements.reviewedCount.textContent = formatNumber(s.reviewed || 0);
+}
+
+function updatePaginationUI() {
+    const { page, total, totalPages } = state.pagination;
+
+    elements.pageInfo.textContent = `Page ${page} of ${totalPages}`;
+    elements.prevPage.disabled = page <= 1;
+    elements.nextPage.disabled = page >= totalPages;
+    elements.resultCount.textContent = `${formatNumber(total)} tweets`;
+
+    // Update export URLs with current filters
+    updateExportUrls();
+}
+
+function updateExportUrls() {
+    const params = new URLSearchParams();
+
+    // quality removed
+    if (state.filters.swipe) params.set('swipe', state.filters.swipe);
+    if (state.filters.type) params.set('type', state.filters.type);
+    if (state.filters.length) params.set('length', state.filters.length);
+    if (state.filters.tag) params.set('tag', state.filters.tag);
+    params.set('excludeRetweets', state.filters.excludeRetweets);
+    params.set('excludeReplies', state.filters.excludeReplies);
+    params.set('excludeThreads', state.filters.excludeThreads);
+
+    const queryString = params.toString();
+
+    const csvLink = document.getElementById('exportCSV');
+    const jsonLink = document.getElementById('exportJSON');
+
+    if (csvLink) csvLink.href = `/api/export/csv?${queryString}`;
+    if (jsonLink) jsonLink.href = `/api/export/json?${queryString}`;
+}
+
+// ============================================
+// Modal Functions
+// ============================================
+
+async function openTweetModal(tweetId) {
+    let tweet = state.tweets.find(t => t.id === tweetId);
+    if (!tweet) {
+        try {
+            const response = await fetch(`/api/tweets/${tweetId}`);
+            tweet = await response.json();
+        } catch (err) {
+            console.error('Error fetching tweet:', err);
+            return;
+        }
+    }
+
+    state.selectedTweet = tweet;
+
+    const date = new Date(tweet.created_at).toLocaleString();
+
+    // Media display
+    const mediaHtml = tweet.media_url ? `
+        <div class="modal-media">
+            <img src="${tweet.media_url}" alt="Media">
+        </div>
+    ` : '';
+
+    // Quoted Tweet
+    let quotedHtml = '';
+    if (tweet.quoted_tweet_id) {
+        if (tweet.quoted_text) {
+            const quotedMedia = tweet.quoted_media ? `
+                <div class="quoted-media">
+                    <img src="${tweet.quoted_media}" loading="lazy" alt="Quoted Media" onerror="this.parentElement.style.display='none'">
+                </div>
+            ` : '';
+
+            quotedHtml = `
+                <div class="quoted-tweet">
+                    <div class="quoted-user">Quoted Tweet</div>
+                    <div class="quoted-text">${linkify(tweet.quoted_text)}</div>
+                    ${quotedMedia}
+                </div>
+            `;
+        } else {
+            quotedHtml = `
+                <div class="quoted-tweet">
+                    <div class="quoted-user">Quoted Tweet</div>
+                    <a href="https://x.com/i/web/status/${tweet.quoted_tweet_id}" target="_blank" class="modal-link">View Quoted Tweet →</a>
+                </div>
+            `;
+        }
+    }
+
+    // Build tag list for clicking
+    const allTagsHtml = state.allTags.map(tag => `
+        <span class="tag-chip" data-tag="${tag.name}" data-category="${tag.category}">${tag.name}</span>
+    `).join('');
+
+    elements.modalBody.innerHTML = `
+        <p class="modal-tweet-text">${linkify(tweet.full_text)}</p>
+        ${mediaHtml}
+        ${quotedHtml}
+        
+        <div class="modal-section">
+            <div class="modal-stats">
+                <span>❤️ ${tweet.favorite_count} likes</span>
+                <span>🔁 ${tweet.retweet_count} retweets</span>
+                <span>📅 ${date}</span>
+            </div>
+            ${tweet.tweet_url ? `<a href="${tweet.tweet_url}" target="_blank" class="modal-link">View on X →</a>` : ''}
+        </div>
+        
+        <div class="modal-section">
+            <h4>Swipe Status</h4>
+            <div class="swipe-buttons">
+                <button class="swipe-btn pass ${tweet.swipe_status === 'dislike' ? 'active' : ''}" 
+                        data-status="dislike">Pass</button>
+                <button class="swipe-btn like ${tweet.swipe_status === 'like' ? 'active' : ''}" 
+                        data-status="like">Like</button>
+                <button class="swipe-btn superlike ${tweet.swipe_status === 'superlike' ? 'active' : ''}" 
+                        data-status="superlike">Superlike</button>
+                <button class="swipe-btn review-later ${tweet.swipe_status === 'review_later' ? 'active' : ''}" 
+                        data-status="review_later">🔄 Review Later</button>
+            </div>
+        </div>
+
+        <div id="thread-section" class="modal-section" style="display: none;">
+             <h4>Thread</h4>
+             <div class="thread-chain" id="threadChain"></div>
+        </div>
+        
+        <div class="modal-section">
+            <h4>Quality Rating</h4>
+            <div class="quality-buttons">
+                <button class="quality-btn high ${tweet.quality_rating === 'high' ? 'active' : ''}" 
+                        data-quality="high">⭐ High</button>
+                <button class="quality-btn medium ${tweet.quality_rating === 'medium' ? 'active' : ''}" 
+                        data-quality="medium">Medium</button>
+                <button class="quality-btn low ${tweet.quality_rating === 'low' ? 'active' : ''}" 
+                        data-quality="low">Low</button>
+            </div>
+        </div>
+        
+        <div class="modal-section">
+            <h4>Tags</h4>
+            <div class="modal-tags" id="modalTags">
+                ${(tweet.tags || []).map(tag => `
+                    <span class="modal-tag" style="border-color: ${tag.color || '#30363d'}">
+                        ${tag.name}
+                        <span class="remove-tag" data-tag="${tag.name}">×</span>
+                    </span>
+                `).join('')}
+            </div>
+            <div class="add-tag-container">
+                <div class="add-tag-input">
+                    <input type="text" id="newTagInput" placeholder="Type to search tags...">
+                    <button id="addTagBtn">Add</button>
+                </div>
+                <div class="tag-suggestions" id="tagSuggestions"></div>
+            </div>
+            <div class="all-tags-list">
+                ${allTagsHtml}
+            </div>
+        </div>
+    `;
+
+    // Add event handlers
+    document.querySelectorAll('.swipe-btn').forEach(btn => {
+        // ... handled below ...
+    });
+
+    // Fetch and render thread if applicable (async but doesn't block modal open)
+    fetch(`/api/tweets/${tweet.id}/thread`)
+        .then(res => res.json())
+        .then(thread => {
+            if (thread && thread.length > 0) {
+                const threadSection = document.getElementById('thread-section');
+                const threadContainer = document.getElementById('threadChain');
+                threadSection.style.display = 'block';
+                threadContainer.innerHTML = thread.map(t => `
+                    <div class="thread-tweet">
+                        <div class="thread-line"></div>
+                        <div class="tweet-text">${linkify(t.full_text)}</div>
+                        <div class="tweet-meta">
+                            <span>❤️ ${t.favorite_count}</span>
+                            <span>📅 ${new Date(t.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        })
+        .catch(err => console.error('Error fetching thread:', err));
+
+    // Add event handlers
+    document.querySelectorAll('.swipe-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.dataset.status;
+            updateTweet(tweet.id, { swipe_status: status });
+            document.querySelectorAll('.swipe-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('.quality-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const quality = btn.dataset.quality;
+            updateTweet(tweet.id, { quality_rating: quality });
+            document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('.remove-tag').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const tagName = btn.dataset.tag;
+            if (await removeTag(tweet.id, tagName)) {
+                btn.parentElement.remove();
+            }
+        });
+    });
+
+    // Tag autocomplete
+    const tagInput = document.getElementById('newTagInput');
+    const suggestionsEl = document.getElementById('tagSuggestions');
+
+    tagInput.addEventListener('input', () => {
+        const query = tagInput.value.toLowerCase();
+        if (query.length < 1) {
+            suggestionsEl.classList.remove('visible');
+            return;
+        }
+
+        const matches = state.allTags.filter(t => t.name.includes(query)).slice(0, 10);
+        if (matches.length === 0) {
+            suggestionsEl.classList.remove('visible');
+            return;
+        }
+
+        suggestionsEl.innerHTML = matches.map(t => `
+            <div class="tag-suggestion" data-tag="${t.name}" data-category="${t.category}">
+                ${t.name}
+                <span class="tag-category">${t.category}</span>
+            </div>
+        `).join('');
+        suggestionsEl.classList.add('visible');
+
+        // Add click handlers to suggestions
+        document.querySelectorAll('.tag-suggestion').forEach(s => {
+            s.addEventListener('click', async () => {
+                const tagName = s.dataset.tag;
+                const category = s.dataset.category;
+                if (await addTag(tweet.id, tagName, category)) {
+                    const tagsContainer = document.getElementById('modalTags');
+                    tagsContainer.innerHTML += `
+                        <span class="modal-tag">
+                            ${tagName}
+                            <span class="remove-tag" data-tag="${tagName}">×</span>
+                        </span>
+                    `;
+                    tagInput.value = '';
+                    suggestionsEl.classList.remove('visible');
+                }
+            });
+        });
+    });
+
+    // Click on all-tags-list chips
+    document.querySelectorAll('.all-tags-list .tag-chip').forEach(chip => {
+        chip.addEventListener('click', async () => {
+            const tagName = chip.dataset.tag;
+            const category = chip.dataset.category;
+            if (await addTag(tweet.id, tagName, category)) {
+                const tagsContainer = document.getElementById('modalTags');
+                tagsContainer.innerHTML += `
+                    <span class="modal-tag">
+                        ${tagName}
+                        <span class="remove-tag" data-tag="${tagName}">×</span>
+                    </span>
+                `;
+            }
+        });
+    });
+
+    document.getElementById('addTagBtn').addEventListener('click', async () => {
+        const input = document.getElementById('newTagInput');
+        const tagName = input.value.trim().toLowerCase();
+        if (tagName && await addTag(tweet.id, tagName)) {
+            const tagsContainer = document.getElementById('modalTags');
+            tagsContainer.innerHTML += `
+                <span class="modal-tag">
+                    ${tagName}
+                    <span class="remove-tag" data-tag="${tagName}">×</span>
+                </span>
+            `;
+            input.value = '';
+            suggestionsEl.classList.remove('visible');
+        }
+    });
+
+    document.getElementById('newTagInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('addTagBtn').click();
+        }
+    });
+
+    elements.modal.classList.add('active');
+}
+
+function closeModal() {
+    elements.modal.classList.remove('active');
+    state.selectedTweet = null;
+}
+
+// ============================================
+// Event Handlers
+// ============================================
+
+function setupEventHandlers() {
+    // Search
+    elements.searchBtn.addEventListener('click', () => {
+        state.filters.search = elements.searchInput.value;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') elements.searchBtn.click();
+    });
+
+    // Filters
+    elements.filterType.addEventListener('change', () => {
+        state.filters.type = elements.filterType.value;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.filterLength.addEventListener('change', () => {
+        state.filters.length = elements.filterLength.value;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    // Quality listener removed
+    elements.filterSwipe.addEventListener('change', () => {
+        state.filters.swipe = elements.filterSwipe.value;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.excludeRetweets.addEventListener('change', () => {
+        state.filters.excludeRetweets = elements.excludeRetweets.checked;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.excludeReplies.addEventListener('change', () => {
+        state.filters.excludeReplies = elements.excludeReplies.checked;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.excludeThreads.addEventListener('change', () => {
+        state.filters.excludeThreads = elements.excludeThreads.checked;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    // Sorting
+    elements.sortBy.addEventListener('change', () => {
+        state.sort.by = elements.sortBy.value;
+        fetchTweets();
+    });
+
+    elements.sortOrder.addEventListener('click', () => {
+        state.sort.order = state.sort.order === 'desc' ? 'asc' : 'desc';
+        elements.sortOrder.textContent = state.sort.order === 'desc' ? '↓' : '↑';
+        fetchTweets();
+    });
+
+    // Pagination
+    elements.prevPage.addEventListener('click', () => {
+        if (state.pagination.page > 1) {
+            state.pagination.page--;
+            fetchTweets();
+        }
+    });
+
+    elements.nextPage.addEventListener('click', () => {
+        if (state.pagination.page < state.pagination.totalPages) {
+            state.pagination.page++;
+            fetchTweets();
+        }
+    });
+
+    // Clear filters
+    elements.clearFilters.addEventListener('click', () => {
+        state.filters = {
+            search: '',
+            type: '',
+            length: '',
+            // quality: '', REMOVED
+            swipe: '',
+            tag: '',
+            excludeRetweets: true,
+            excludeReplies: true,
+            excludeThreads: true
+        };
+        state.pagination.page = 1;
+
+        // Reset UI
+        elements.searchInput.value = '';
+        elements.filterType.value = '';
+        elements.filterLength.value = '';
+        // elements.filterQuality.value = ''; REMOVED
+        elements.filterSwipe.value = '';
+        elements.excludeRetweets.checked = true;
+        elements.excludeReplies.checked = true;
+        elements.excludeThreads.checked = true;
+
+        fetchTweets();
+        renderTags();
+    });
+
+    // Modal
+    elements.modalClose.addEventListener('click', closeModal);
+    elements.modal.addEventListener('click', (e) => {
+        if (e.target === elements.modal) closeModal();
+    });
+
+    // Import
+    elements.importBtn.addEventListener('click', () => {
+        elements.archiveInput.click();
+    });
+
+    elements.archiveInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            uploadArchive(file);
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+}
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function linkify(text) {
+    // First escape HTML to prevent XSS
+    const escaped = escapeHtml(text);
+    // Then replace URLs with links
+    return escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-link" onclick="event.stopPropagation()">$1</a>');
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
+// ============================================
+// Initialize
+// ============================================
+
+async function init() {
+    elements.tweetGrid.innerHTML = '<div class="loading">Loading tweets...</div>';
+
+    setupEventHandlers();
+
+    // Load data
+    await Promise.all([
+        fetchTweets(),
+        fetchTags(),
+        fetchStats()
+    ]);
+}
+
+// Start the app
+init();

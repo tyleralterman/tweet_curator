@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tweet Curator - Content Directory</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🐦 Tweet Curator</h1>
+                <a href="/swipe.html" class="swipe-link">✨ Swipe Mode</a>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-panel">
+                <div class="stat">
+                    <span class="stat-value" id="totalTweets">-</span>
+                    <span class="stat-label">Total</span>
+                </div>
+                <div class="stat stat-gold">
+                    <span class="stat-value" id="superlikedCount">-</span>
+                    <span class="stat-label">⭐ Super</span>
+                </div>
+                <div class="stat stat-burgundy">
+                    <span class="stat-value" id="likedCount">-</span>
+                    <span class="stat-label">❤️ Liked</span>
+                </div>
+                <div class="stat stat-green">
+                    <span class="stat-value" id="reviewedCount">-</span>
+                    <span class="stat-label">Reviewed</span>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filter-section">
+                <h3>📊 Filters</h3>
+
+                <div class="filter-group">
+                    <label>Type</label>
+                    <select id="filterType">
+                        <option value="">All Types</option>
+                        <option value="text_only">Text Only</option>
+                        <option value="media">With Media</option>
+                        <option value="quote">Quote Tweets</option>
+                        <option value="thread">Thread Posts</option>
+                        <option value="reply">Replies</option>
+                        <option value="retweet">Retweets</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Length</label>
+                    <select id="filterLength">
+                        <option value="">All Lengths</option>
+                        <option value="short">Short (≤280)</option>
+                        <option value="medium">Medium (281-1000)</option>
+                        <option value="long">Long (>1000)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Swipe Status</label>
+                    <select id="filterSwipe">
+                        <option value="">All</option>
+                        <option value="superlike">⭐ Superliked</option>
+                        <option value="like">❤️ Liked</option>
+                        <option value="dislike">👎 Disliked</option>
+                        <option value="review_later">🔄 Review Later</option>
+                        <option value="unreviewed">📋 Unreviewed</option>
+                    </select>
+                </div>
+
+                <div class="filter-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="excludeRetweets" checked>
+                        Hide Retweets
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="excludeReplies" checked>
+                        Hide Replies
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="excludeThreads" checked>
+                        Hide Threads
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tags Section -->
+            <div class="filter-section tags-section">
+                <h3>🏷️ Topic Tags</h3>
+                <div id="topicTags" class="tag-list"></div>
+            </div>
+
+            <div class="filter-section tags-section">
+                <h3>🎯 Pattern Tags</h3>
+                <div id="patternTags" class="tag-list"></div>
+            </div>
+
+            <div class="filter-section tags-section">
+                <h3>📦 Use Tags</h3>
+                <div id="useTags" class="tag-list"></div>
+            </div>
+
+            <!-- Import Section -->
+            <div class="import-section">
+                <h3>📥 Import Archive</h3>
+                <input type="file" id="archiveInput" accept=".zip" style="display:none">
+                <button id="importBtn" class="import-btn">📁 Select Archive ZIP</button>
+                <div id="importStatus" class="import-status"></div>
+            </div>
+
+            <!-- Export Section -->
+            <div class="export-section">
+                <h3>📤 Export</h3>
+                <div class="export-buttons">
+                    <a href="/api/export/csv" class="export-btn" id="exportCSV">CSV</a>
+                    <a href="/api/export/json" class="export-btn" id="exportJSON">JSON</a>
+                </div>
+            </div>
+
+            <button id="clearFilters" class="clear-btn">Clear All Filters</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search tweets...">
+                    <button id="searchBtn">🔍</button>
+                </div>
+
+                <div class="sort-controls">
+                    <select id="sortBy">
+                        <option value="created_at">Date</option>
+                        <option value="favorite_count">Likes</option>
+                        <option value="retweet_count">Retweets</option>
+                        <option value="char_count">Length</option>
+                    </select>
+                    <button id="sortOrder" class="sort-order-btn" data-order="desc">↓</button>
+                </div>
+
+                <div class="view-info">
+                    <span id="resultCount">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Tweet Grid -->
+            <div id="tweetGrid" class="tweet-grid">
+                <!-- Tweets will be loaded here -->
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                <button id="prevPage" disabled>← Previous</button>
+                <span id="pageInfo">Page 1</span>
+                <button id="nextPage">Next →</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Tweet Detail Modal -->
+    <div id="tweetModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

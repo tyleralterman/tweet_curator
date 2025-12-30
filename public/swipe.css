@@ -1,0 +1,894 @@
+/* ============================================
+   Tweet Curator - Swipe Interface (Dark Academia)
+   ============================================ */
+
+:root {
+    /* Dark Academia color palette - Richer */
+    --bg-primary: #151210;
+    --bg-secondary: #1e1a17;
+    --bg-tertiary: #2a2520;
+    --bg-card: #241f1b;
+    --border: #3d3530;
+    --border-light: #4a423b;
+
+    /* Text colors */
+    --text-primary: #ede5d8;
+    --text-secondary: #c4b8a5;
+    --text-muted: #8a7f73;
+
+    /* Feature colors */
+    --superlike: #d4a84b;
+    --like: #8b3a4a;
+    --dislike: #5e564d;
+    --review-later: #5a3a50;
+    /* Plum */
+
+    /* Accents */
+    --burgundy: #803040;
+    --amber: #c9a227;
+    --forest: #3a5a48;
+    --cream: #ede5d8;
+
+    --radius: 20px;
+    --radius-sm: 12px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: 'Inter', 'Georgia', serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow: hidden;
+    touch-action: pan-y;
+}
+
+/* Subtle texture */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.swipe-app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* ============================================
+   Header
+   ============================================ */
+
+.swipe-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    margin-bottom: 8px;
+}
+
+.back-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.back-link:hover {
+    color: var(--amber);
+}
+
+.swipe-header h1 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--burgundy), var(--amber));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.progress-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+#remainingCount {
+    font-weight: 600;
+    color: var(--amber);
+}
+
+/* ============================================
+   Progress Bar
+   ============================================ */
+
+.progress-bar {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--burgundy), var(--amber));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+/* Session Stats */
+.session-stats {
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.session-count {
+    padding: 4px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.session-count strong {
+    color: var(--text-primary);
+}
+
+/* ============================================
+   Card Container
+   ============================================ */
+
+.card-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.card-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: 550px;
+}
+
+/* ============================================
+   Tweet Card
+   ============================================ */
+
+.tweet-card {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 24px 80px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    max-height: 100%;
+    /* Hide scrollbar but keep functionality */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+    cursor: grab;
+    user-select: none;
+    transform-origin: center center;
+    will-change: transform;
+    transition: box-shadow 0.2s;
+}
+
+.tweet-card:active {
+    cursor: grabbing;
+}
+
+.tweet-card.animating {
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Card stacking effect */
+.tweet-card:nth-child(1) {
+    z-index: 3;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.tweet-card:nth-child(2) {
+    z-index: 2;
+    transform: scale(0.95) translateY(10px);
+    opacity: 0.7;
+    background: var(--bg-secondary);
+}
+
+.tweet-card:nth-child(3) {
+    z-index: 1;
+    transform: scale(0.9) translateY(20px);
+    opacity: 0.4;
+    background: var(--bg-tertiary);
+}
+
+.tweet-card:nth-child(n+4) {
+    display: none;
+}
+
+/* Swipe Indicators / Overlays */
+.card-overlay {
+    position: absolute;
+    top: 40px;
+    right: 40px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1.4rem;
+    opacity: 0;
+    transition: opacity 0.1s;
+    pointer-events: none;
+    border: 3px solid currentColor;
+    z-index: 10;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transform: rotate(15deg);
+}
+
+.card-overlay.overlay-like {
+    left: 40px;
+    right: auto;
+    color: #4ade80;
+    /* Green */
+    transform: rotate(-15deg);
+}
+
+.card-overlay.overlay-dislike {
+    color: #f87171;
+    /* Red */
+}
+
+.card-overlay.overlay-superlike {
+    bottom: 80px;
+    top: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) rotate(0);
+    color: #3b82f6;
+    /* Blue */
+    border-color: #3b82f6;
+}
+
+/* Old classes for compat if needed, but we use card-overlay now */
+.swipe-indicator {
+    display: none;
+}
+
+.swipe-indicator.like {
+    left: 20px;
+    color: var(--success);
+    transform: rotate(-15deg);
+}
+
+.swipe-indicator.dislike {
+    right: 20px;
+    color: var(--dislike);
+    transform: rotate(15deg);
+}
+
+.swipe-indicator.superlike {
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) rotate(0);
+    color: var(--superlike);
+}
+
+.swipe-indicator.review-later {
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--review-later);
+}
+
+/* Tweet Content */
+.card-content {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 1.15rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--cream);
+    display: flex;
+    flex-direction: column;
+}
+
+.tweet-text a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+/* Media */
+.card-media {
+    margin: 16px 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    max-height: 250px;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-media img,
+.card-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    max-height: 250px;
+}
+
+/* Quoted Tweet */
+.quoted-tweet {
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    font-size: 0.9rem;
+}
+
+.quoted-tweet .quoted-user {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.card-footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.stat-group {
+    display: flex;
+    gap: 16px;
+}
+
+.footer-date-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+}
+
+.footer-date-link:hover {
+    color: var(--amber);
+}
+
+.external-icon {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+.card-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.card-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.tag-badge {
+    padding: 3px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    font-size: 0.7rem;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.card-tag {
+    padding: 2px 8px;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    font-size: 0.7rem;
+    border: 1px solid var(--border);
+}
+
+/* ============================================
+   Action Buttons
+   ============================================ */
+
+.action-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 16px;
+    max-width: 400px;
+    margin: 0 auto;
+    width: 100%;
+    padding-bottom: 30px;
+}
+
+.header-controls {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0;
+    z-index: 100;
+}
+
+.filter-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.filter-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    width: 300px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    display: none;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.filter-menu.visible {
+    display: block;
+}
+
+.filter-section {
+    margin-bottom: 16px;
+}
+
+.filter-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    letter-spacing: 0.05em;
+}
+
+.filter-section label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.filter-section label:hover {
+    color: var(--text-primary);
+}
+
+.topic-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.apply-btn {
+    flex: 1;
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.clear-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+}
+
+.action-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    color: var(--text-secondary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.action-btn:active {
+    transform: scale(0.9);
+}
+
+.action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.action-btn .btn-icon {
+    font-size: 1.5rem;
+    display: block;
+    line-height: 1;
+}
+
+.action-btn .btn-label {
+    position: absolute;
+    bottom: -22px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Vertical layout for Superlike and Review Later */
+.vertical-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.vertical-actions .action-btn {
+    width: 54px;
+    height: 54px;
+}
+
+.vertical-actions .action-btn .btn-label {
+    display: none;
+}
+
+.vertical-actions .btn-icon {
+    font-size: 1.3rem;
+}
+
+/* Button Variants */
+.action-btn.undo {
+    width: 44px;
+    height: 44px;
+    margin-right: 8px;
+    background: transparent;
+    border-style: dashed;
+}
+
+.action-btn.undo .btn-icon {
+    font-size: 1.1rem;
+}
+
+.action-btn.dislike:hover:not(:disabled) {
+    border-color: var(--dislike);
+    color: var(--dislike);
+    background: rgba(107, 99, 87, 0.1);
+    transform: scale(1.1);
+}
+
+.action-btn.like:hover:not(:disabled) {
+    border-color: var(--like);
+    color: var(--like);
+    background: rgba(128, 48, 64, 0.1);
+    transform: scale(1.1);
+}
+
+.action-btn.superlike:hover:not(:disabled) {
+    border-color: var(--superlike);
+    color: var(--superlike);
+    background: rgba(212, 168, 75, 0.1);
+    transform: scale(1.1);
+}
+
+.action-btn.review-later:hover:not(:disabled) {
+    border-color: var(--review-later);
+    color: #a07a90;
+    background: rgba(90, 58, 80, 0.1);
+    transform: scale(1.1);
+}
+
+/* Keyboard Hints */
+.shortcuts-hint {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 24px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* Hide shortcuts on touch */
+@media (hover: none) {
+    .shortcuts-hint {
+        display: none;
+    }
+}
+
+/* Loading & Empty States */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--amber);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Animations */
+@keyframes flyOutRight {
+    to {
+        transform: translateX(150%) rotate(30deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flyOutLeft {
+    to {
+        transform: translateX(-150%) rotate(-30deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flyOutUp {
+    to {
+        transform: translateY(-150%) scale(1.1);
+        opacity: 0;
+    }
+}
+
+@keyframes flyOutDown {
+    to {
+        transform: translateY(150%) scale(0.9);
+        opacity: 0;
+    }
+}
+
+.tweet-card.fly-right {
+    animation: flyOutRight 0.4s ease-out forwards;
+}
+
+.tweet-card.fly-left {
+    animation: flyOutLeft 0.4s ease-out forwards;
+}
+
+.tweet-card.fly-up {
+    animation: flyOutUp 0.4s ease-out forwards;
+}
+
+.tweet-card.fly-down {
+    animation: flyOutDown 0.4s ease-out forwards;
+}
+
+/* Responsive adjustments */
+@media (min-height: 800px) {
+    .card-stack {
+        max-height: 600px;
+    }
+
+    .action-btn {
+        width: 72px;
+        height: 72px;
+    }
+
+    .vertical-actions .action-btn {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+@media (max-height: 700px) {
+    .swipe-header {
+        margin-bottom: 4px;
+    }
+
+    .card-container {
+        margin-bottom: 10px;
+    }
+
+    .action-buttons {
+        gap: 8px;
+    }
+
+    .action-btn {
+        width: 56px;
+        height: 56px;
+    }
+
+    .vertical-actions .action-btn {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* Quoted Tweet Styles */
+.quoted-tweet {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    font-size: 0.85rem;
+}
+
+.quoted-user {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.quoted-text {
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.quoted-media {
+    margin-top: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    max-height: 150px;
+}
+
+.quoted-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.quoted-tweet a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.quoted-tweet a:hover {
+    text-decoration: underline;
+}
+
+/* Heart Animation */
+.floating-heart {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    font-size: 5rem;
+    pointer-events: none;
+    z-index: 100;
+    animation: popHeart 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popHeart {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.5);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -150%) scale(2);
+        opacity: 0;
+    }
+}
+
+/* Thread Badge */
+.thread-badge {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--accent);
+    color: var(--bg-primary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    letter-spacing: 1px;
+}

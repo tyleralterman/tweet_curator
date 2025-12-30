@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tweet Curator - Swipe Mode</title>
+    <link rel="stylesheet" href="swipe.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="swipe-app">
+        <!-- Header -->
+        <header class="swipe-header">
+            <a href="/" class="back-link">← Directory</a>
+            <h1>✨ Curator</h1>
+            <div class="progress-info">
+                Remaining: <span id="remainingCount">-</span>
+            </div>
+        </header>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressBar"></div>
+        </div>
+
+        <!-- Session Stats (Today) -->
+        <div class="session-stats">
+            <span class="session-count">Today: <strong id="todayCount">0</strong></span>
+        </div>
+
+        <!-- Card Container -->
+        <div class="card-container">
+            <div id="cardStack" class="card-stack">
+                <!-- Cards will be inserted here -->
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading curated tweets...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="btnUndo" class="action-btn undo" title="Undo (Z)" disabled>
+                <span class="btn-icon">↺</span>
+            </button>
+
+            <button id="btnDislike" class="action-btn dislike" title="Pass (Left)">
+                <span class="btn-icon">👎</span>
+                <span class="btn-label">Pass</span>
+            </button>
+
+            <button id="btnReviewLater" class="action-btn review-later" title="Review Later (Down)">
+                <span class="btn-icon">🔄</span>
+                <span class="btn-label">Later</span>
+            </button>
+
+            <button id="btnSuperlike" class="action-btn superlike" title="Superlike (Up)">
+                <span class="btn-icon">⭐</span>
+                <span class="btn-label">Super</span>
+            </button>
+
+            <button id="btnLike" class="action-btn like" title="Like (Right)">
+                <span class="btn-icon">❤️</span>
+                <span class="btn-label">Like</span>
+            </button>
+        </div>
+
+        <!-- Keyboard Hints -->
+        <div class="shortcuts-hint">
+            <span>← Pass</span>
+            <span>↓ Later</span>
+            <span>↑ Super</span>
+            <span>→ Like</span>
+            <span>Z Undo</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="swipe.js"></script>
+</body>
+
+</html>
