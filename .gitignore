@@ -1,11 +1,12 @@
 # Dependencies
 node_modules/
 
-# Database files (will be on persistent disk in production)
-*.db
+# Database files (runtime databases, not the seed)
+tweets.db
 *.db-wal
 *.db-shm
 database/tweets.db
+# NOTE: data_tweets.db is intentionally NOT ignored - it's the seed database
 
 # Uploads
 uploads/

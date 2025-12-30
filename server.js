@@ -25,17 +25,28 @@ const DB_PATHS = [
     path.join(__dirname, 'database/tweets.db')   // Subdirectory (local dev)
 ];
 
+// Seed database (included in repo for easy deployment)
+const SEED_DB_PATH = path.join(__dirname, 'data_tweets.db');
+
 let DB_PATH = DB_PATHS.find(p => fs.existsSync(p));
 
-// If no database exists, create one at the best available location
+// If no database exists, try to copy from seed or create new
 if (!DB_PATH) {
-    // Prefer /data if it exists (Render), otherwise use root
+    // Determine target location
     if (fs.existsSync('/data')) {
         DB_PATH = '/data/tweets.db';
     } else {
         DB_PATH = DB_PATHS[1]; // Root level
     }
-    console.log('📝 No database found. A new one will be created when you import tweets.');
+
+    // Copy seed database if available
+    if (fs.existsSync(SEED_DB_PATH)) {
+        console.log('📦 Copying seed database to', DB_PATH);
+        fs.copyFileSync(SEED_DB_PATH, DB_PATH);
+        console.log('✅ Database ready with pre-loaded data!');
+    } else {
+        console.log('📝 No database found. A new one will be created when you import tweets.');
+    }
 }
 
 const db = new Database(DB_PATH, { readonly: false });
