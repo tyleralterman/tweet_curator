@@ -372,6 +372,16 @@ async function importTweets() {
     console.log(`   └── Long (>1000): ${stats.long_tweets.toLocaleString()}`);
 
     db.close();
+
+    // Automatically tag new tweets
+    console.log('\n🏷️  Starting automatic tagging of new tweets...');
+    try {
+        const { tagNewTweets } = require('./tag_new_tweets.js');
+        await tagNewTweets();
+    } catch (err) {
+        console.log('⚠️  Auto-tagging skipped (run manually: node scripts/tag_new_tweets.js)');
+        console.log('   Error:', err.message);
+    }
 }
 
 // Run import

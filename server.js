@@ -18,17 +18,23 @@ const PORT = process.env.PORT || 3000;
 // File upload setup
 const upload = multer({ dest: path.join(__dirname, 'uploads/') });
 
-// Database setup - check multiple locations
+// Database setup - check multiple locations (in order of preference)
 const DB_PATHS = [
+    '/data/tweets.db',                           // Render persistent disk
     path.join(__dirname, 'tweets.db'),           // Root level (Railway)
     path.join(__dirname, 'database/tweets.db')   // Subdirectory (local dev)
 ];
 
 let DB_PATH = DB_PATHS.find(p => fs.existsSync(p));
 
-// If no database exists, create one at root level
+// If no database exists, create one at the best available location
 if (!DB_PATH) {
-    DB_PATH = DB_PATHS[0]; // Default to root
+    // Prefer /data if it exists (Render), otherwise use root
+    if (fs.existsSync('/data')) {
+        DB_PATH = '/data/tweets.db';
+    } else {
+        DB_PATH = DB_PATHS[1]; // Root level
+    }
     console.log('📝 No database found. A new one will be created when you import tweets.');
 }
 
@@ -472,6 +478,205 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Get swipe queue (unreviewed)
+
+// ============================================
+// Quoted Tweet Fetching
+// ============================================
+
+// Get quoted tweet content - first checks DB, then fetches from Twitter
+app.get('/api/quoted-tweet/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // First check if it's a self-quote (in tweets table)
+        const selfQuote = db.prepare(`
+            SELECT id, full_text as content, created_at, media_url
+            FROM tweets WHERE id = ?
+        `).get(id);
+
+        if (selfQuote) {
+            return res.json({
+                id: selfQuote.id,
+                content: selfQuote.content,
+                author_username: 'tyleralterman',
+                author_name: 'Tyler Alterman',
+                created_at: selfQuote.created_at,
+                media_url: selfQuote.media_url,
+                is_self: true
+            });
+        }
+
+        // Check cache
+        const cached = db.prepare(`
+            SELECT * FROM quoted_tweets WHERE id = ?
+        `).get(id);
+
+        if (cached) {
+            return res.json({
+                id: cached.id,
+                content: cached.content,
+                author_username: cached.author_username,
+                author_name: cached.author_name,
+                created_at: cached.created_at,
+                is_available: cached.is_available,
+                from_cache: true
+            });
+        }
+
+        // Try to fetch from Twitter using oEmbed or syndication API
+        const tweetUrl = `https://twitter.com/i/status/${id}`;
+
+        // Method 1: Try using Twitter's syndication API (no auth required, works for public tweets)
+        try {
+            const syndicationUrl = `https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${Date.now()}`;
+            const syndicationRes = await fetch(syndicationUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                }
+            });
+
+            if (syndicationRes.ok) {
+                const data = await syndicationRes.json();
+
+                if (data && data.text) {
+                    // Cache the result
+                    db.prepare(`
+                        INSERT OR REPLACE INTO quoted_tweets (id, author_name, author_username, content, created_at, is_available)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).run(
+                        id,
+                        data.user?.name || 'Unknown',
+                        data.user?.screen_name || 'unknown',
+                        data.text,
+                        data.created_at || null,
+                        1
+                    );
+
+                    return res.json({
+                        id: id,
+                        content: data.text,
+                        author_username: data.user?.screen_name || 'unknown',
+                        author_name: data.user?.name || 'Unknown',
+                        created_at: data.created_at,
+                        media_url: data.photos?.[0]?.url || data.video?.poster || null,
+                        is_available: true
+                    });
+                }
+            }
+        } catch (err) {
+            console.log('Syndication API failed, trying oEmbed...');
+        }
+
+        // Method 2: Try oEmbed API
+        try {
+            const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
+            const oembedRes = await fetch(oembedUrl);
+
+            if (oembedRes.ok) {
+                const data = await oembedRes.json();
+
+                // Extract text from HTML (strip tags)
+                let content = data.html || '';
+                // Remove HTML tags except paragraphs
+                content = content.replace(/<blockquote[^>]*>/gi, '');
+                content = content.replace(/<\/blockquote>/gi, '');
+                content = content.replace(/<p[^>]*>/gi, '');
+                content = content.replace(/<\/p>/gi, '\n');
+                content = content.replace(/<a[^>]*>([^<]*)<\/a>/gi, '$1');
+                content = content.replace(/<[^>]+>/g, '');
+                content = content.replace(/&mdash;.*/s, '').trim(); // Remove author attribution
+
+                // Cache the result
+                db.prepare(`
+                    INSERT OR REPLACE INTO quoted_tweets (id, author_name, author_username, content, is_available)
+                    VALUES (?, ?, ?, ?, ?)
+                `).run(id, data.author_name || 'Unknown', data.author_url?.split('/').pop() || 'unknown', content, 1);
+
+                return res.json({
+                    id: id,
+                    content: content,
+                    author_username: data.author_url?.split('/').pop() || 'unknown',
+                    author_name: data.author_name || 'Unknown',
+                    html: data.html,
+                    is_available: true
+                });
+            }
+        } catch (err) {
+            console.log('oEmbed failed:', err.message);
+        }
+
+        // Tweet not available
+        db.prepare(`
+            INSERT OR REPLACE INTO quoted_tweets (id, is_available)
+            VALUES (?, ?)
+        `).run(id, 0);
+
+        res.json({
+            id: id,
+            is_available: false,
+            message: 'Tweet may be deleted or private'
+        });
+
+    } catch (err) {
+        console.error('Error fetching quoted tweet:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Batch fetch multiple quoted tweets
+app.post('/api/quoted-tweets/batch', async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids)) {
+            return res.status(400).json({ error: 'ids array required' });
+        }
+
+        const results = {};
+
+        for (const id of ids.slice(0, 20)) { // Limit to 20
+            // Check self-quote first
+            const selfQuote = db.prepare(`
+                SELECT id, full_text as content, created_at, media_url
+                FROM tweets WHERE id = ?
+            `).get(id);
+
+            if (selfQuote) {
+                results[id] = {
+                    id: selfQuote.id,
+                    content: selfQuote.content,
+                    author_username: 'tyleralterman',
+                    author_name: 'Tyler Alterman',
+                    is_self: true,
+                    is_available: true
+                };
+                continue;
+            }
+
+            // Check cache
+            const cached = db.prepare(`
+                SELECT * FROM quoted_tweets WHERE id = ?
+            `).get(id);
+
+            if (cached) {
+                results[id] = {
+                    id: cached.id,
+                    content: cached.content,
+                    author_username: cached.author_username,
+                    author_name: cached.author_name,
+                    is_available: cached.is_available
+                };
+            } else {
+                // Mark as needs fetch
+                results[id] = { id, needs_fetch: true };
+            }
+        }
+
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 app.get('/api/swipe/queue', (req, res) => {
     try {
         const { limit = 10, tag = '', length = '' } = req.query;
@@ -777,6 +982,159 @@ app.get('/api/export/csv', (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename="tweets_export.csv"');
         res.send(csv);
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// Semantic Search (AI-powered)
+// ============================================
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+app.post('/api/semantic-search', async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) {
+            return res.status(400).json({ error: 'Query is required' });
+        }
+
+        if (!OPENAI_API_KEY) {
+            return res.status(503).json({
+                error: 'AI search is not configured. Please set OPENAI_API_KEY environment variable.'
+            });
+        }
+
+        // Get available tags for context
+        const tags = db.prepare(`
+            SELECT t.name, t.category, COUNT(tt.tweet_id) as count
+            FROM tags t
+            LEFT JOIN tweet_tags tt ON t.id = tt.tag_id
+            GROUP BY t.id
+            HAVING count > 0
+            ORDER BY count DESC
+            LIMIT 50
+        `).all();
+
+        const tagList = tags.map(t => `${t.name} (${t.category})`).join(', ');
+
+        const systemPrompt = `You are a SQL query generator for a tweet database. Convert natural language queries to SQLite WHERE clauses.
+
+Available columns:
+- full_text (tweet content)
+- favorite_count (likes)
+- retweet_count
+- created_at (ISO date)
+- tweet_type (text_only, reply, retweet, quote, media, thread)
+- length_category (short, medium, long)
+- swipe_status (liked, superliked, disliked, review_later, NULL)
+
+Available tags (can filter via JOIN with tweet_tags): ${tagList}
+
+RULES:
+1. Return ONLY a JSON object with: {"where": "SQL WHERE clause", "orderBy": "optional ORDER BY", "tagFilter": "optional tag name"}
+2. For emotional/sentiment queries, use LIKE patterns on full_text
+3. For engagement queries, use favorite_count or retweet_count
+4. For topic queries, use tagFilter with the most relevant tag name
+5. Keep it simple - SQLite compatible only
+6. If the query mentions multiple topics, pick the most relevant tag
+
+Examples:
+- "tweets where I seem excited" -> {"where": "full_text LIKE '%!%' OR full_text LIKE '%amazing%' OR full_text LIKE '%love%'", "orderBy": "favorite_count DESC"}
+- "spiritual tweets about Trump" -> {"where": "lower(full_text) LIKE '%trump%'", "tagFilter": "spirituality"}
+- "my most popular hot takes" -> {"tagFilter": "hot-take", "orderBy": "favorite_count DESC"}`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: query }
+                ],
+                temperature: 0.3,
+                max_tokens: 500,
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('OpenAI error:', error);
+            return res.status(500).json({ error: 'Failed to process query' });
+        }
+
+        const data = await response.json();
+        const parsed = JSON.parse(data.choices[0].message.content);
+
+        // Build and execute the query
+        let conditions = [];
+        let params = [];
+        let joinClause = '';
+
+        if (parsed.where) {
+            conditions.push(`(${parsed.where})`);
+        }
+
+        if (parsed.tagFilter) {
+            joinClause = `JOIN tweet_tags tt ON t.id = tt.tweet_id JOIN tags tg ON tt.tag_id = tg.id`;
+            conditions.push(`lower(tg.name) = ?`);
+            params.push(parsed.tagFilter.toLowerCase());
+        }
+
+        // Exclude retweets and replies by default
+        conditions.push(`t.tweet_type NOT IN ('retweet', 'reply')`);
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        const orderBy = parsed.orderBy || 't.created_at DESC';
+
+        const sql = `
+            SELECT DISTINCT t.id, t.full_text, t.created_at, t.favorite_count, t.retweet_count,
+                   t.tweet_type, t.length_category, t.swipe_status, t.tweet_url
+            FROM tweets t
+            ${joinClause}
+            ${whereClause}
+            ORDER BY ${orderBy}
+            LIMIT 50
+        `;
+
+        const tweets = db.prepare(sql).all(...params);
+
+        // Get tags for each tweet
+        const tweetIds = tweets.map(t => t.id);
+        if (tweetIds.length > 0) {
+            const tagStmt = db.prepare(`
+                SELECT tt.tweet_id, tg.name, tg.category
+                FROM tweet_tags tt
+                JOIN tags tg ON tt.tag_id = tg.id
+                WHERE tt.tweet_id IN (${tweetIds.map(() => '?').join(',')})
+            `);
+            const allTags = tagStmt.all(...tweetIds);
+
+            const tagMap = {};
+            allTags.forEach(t => {
+                if (!tagMap[t.tweet_id]) tagMap[t.tweet_id] = [];
+                tagMap[t.tweet_id].push({ name: t.name, category: t.category });
+            });
+
+            tweets.forEach(tweet => {
+                tweet.tags = tagMap[tweet.id] || [];
+            });
+        }
+
+        res.json({
+            query: query,
+            interpreted: parsed,
+            count: tweets.length,
+            tweets: tweets
+        });
+
+    } catch (err) {
+        console.error('Semantic search error:', err);
         res.status(500).json({ error: err.message });
     }
 });

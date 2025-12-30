@@ -133,6 +133,27 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- AI Search -->
+            <div class="ai-search-section">
+                <div class="ai-search-box">
+                    <span class="ai-icon">🤖</span>
+                    <input type="text" id="aiSearchInput"
+                        placeholder="Ask me anything... e.g. 'tweets where I seem excited about spirituality'">
+                    <button id="aiSearchBtn">Search</button>
+                </div>
+                <div id="aiSearchStatus" class="ai-search-status"></div>
+            </div>
+
+            <!-- AI Search Results (hidden by default) -->
+            <div id="aiSearchResults" class="ai-search-results" style="display: none;">
+                <div class="ai-results-header">
+                    <h3>🔮 AI Search Results</h3>
+                    <span id="aiResultCount"></span>
+                    <button id="clearAiSearch" class="clear-ai-btn">✕ Clear</button>
+                </div>
+                <div id="aiTweetGrid" class="tweet-grid"></div>
+            </div>
+
             <!-- Top Bar -->
             <div class="top-bar">
                 <div class="search-box">

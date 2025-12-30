@@ -61,6 +61,17 @@ CREATE TABLE IF NOT EXISTS swipe_sessions (
     review_later INTEGER DEFAULT 0
 );
 
+-- Cached quoted tweet content (for embedding external quotes)
+CREATE TABLE IF NOT EXISTS quoted_tweets (
+    id TEXT PRIMARY KEY,
+    author_name TEXT,
+    author_username TEXT,
+    content TEXT,
+    created_at TEXT,
+    fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_available BOOLEAN DEFAULT TRUE
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tweets_created_at ON tweets(created_at);
 CREATE INDEX IF NOT EXISTS idx_tweets_favorite_count ON tweets(favorite_count);

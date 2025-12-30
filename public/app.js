@@ -275,16 +275,16 @@ function renderTweets() {
 
                 quotedHtml = `
                     <div class="quoted-tweet">
-                        <div class="quoted-user">Quoted Tweet</div>
+                        <div class="quoted-user">@tyleralterman</div>
                         <div class="quoted-text">${linkify(tweet.quoted_text)}</div>
                         ${quotedMedia}
                     </div>
                 `;
             } else {
+                // Placeholder for external quote - will be lazy loaded
                 quotedHtml = `
-                    <div class="quoted-tweet">
-                        <div class="quoted-user">Quoted Tweet</div>
-                        <a href="https://x.com/i/web/status/${tweet.quoted_tweet_id}" target="_blank" onclick="event.stopPropagation()">View Quoted Tweet →</a>
+                    <div class="quoted-tweet" data-quoted-id="${tweet.quoted_tweet_id}">
+                        <div class="quoted-loading">Loading quoted tweet...</div>
                     </div>
                 `;
             }
@@ -320,6 +320,47 @@ function renderTweets() {
     document.querySelectorAll('.tweet-card').forEach(card => {
         card.addEventListener('click', () => openTweetModal(card.dataset.id));
     });
+
+    // Lazy load quoted tweets
+    loadQuotedTweets();
+}
+
+// Fetch and render quoted tweet content
+async function loadQuotedTweets() {
+    const quotedElements = document.querySelectorAll('.quoted-tweet[data-quoted-id]');
+    if (quotedElements.length === 0) return;
+
+    for (const el of quotedElements) {
+        const quotedId = el.dataset.quotedId;
+        if (!quotedId) continue;
+
+        try {
+            const response = await fetch(`/api/quoted-tweet/${quotedId}`);
+            const data = await response.json();
+
+            if (data.is_available && data.content) {
+                el.innerHTML = `
+                    <div class="quoted-user">@${data.author_username || 'unknown'}</div>
+                    <div class="quoted-text">${linkify(data.content)}</div>
+                    ${data.media_url ? `<div class="quoted-media"><img src="${data.media_url}" loading="lazy" alt="Media" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                `;
+            } else {
+                el.innerHTML = `
+                    <div class="quoted-user">Quoted Tweet</div>
+                    <div class="quoted-unavailable">
+                        <span>Tweet unavailable</span>
+                        <a href="https://x.com/i/web/status/${quotedId}" target="_blank" onclick="event.stopPropagation()">Try viewing on X →</a>
+                    </div>
+                `;
+            }
+        } catch (err) {
+            console.error('Error loading quoted tweet:', err);
+            el.innerHTML = `
+                <div class="quoted-user">Quoted Tweet</div>
+                <a href="https://x.com/i/web/status/${quotedId}" target="_blank" onclick="event.stopPropagation()">View on X →</a>
+            `;
+        }
+    }
 }
 
 function renderTags() {
@@ -444,16 +485,16 @@ async function openTweetModal(tweetId) {
 
             quotedHtml = `
                 <div class="quoted-tweet">
-                    <div class="quoted-user">Quoted Tweet</div>
+                    <div class="quoted-user">@tyleralterman</div>
                     <div class="quoted-text">${linkify(tweet.quoted_text)}</div>
                     ${quotedMedia}
                 </div>
             `;
         } else {
+            // Placeholder for external quote - will be fetched
             quotedHtml = `
-                <div class="quoted-tweet">
-                    <div class="quoted-user">Quoted Tweet</div>
-                    <a href="https://x.com/i/web/status/${tweet.quoted_tweet_id}" target="_blank" class="modal-link">View Quoted Tweet →</a>
+                <div class="quoted-tweet" id="modal-quoted-tweet" data-quoted-id="${tweet.quoted_tweet_id}">
+                    <div class="quoted-loading">Loading quoted tweet...</div>
                 </div>
             `;
         }
@@ -558,6 +599,38 @@ async function openTweetModal(tweetId) {
             }
         })
         .catch(err => console.error('Error fetching thread:', err));
+
+    // Fetch quoted tweet if needed
+    const modalQuotedEl = document.getElementById('modal-quoted-tweet');
+    if (modalQuotedEl) {
+        const quotedId = modalQuotedEl.dataset.quotedId;
+        fetch(`/api/quoted-tweet/${quotedId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.is_available && data.content) {
+                    modalQuotedEl.innerHTML = `
+                        <div class="quoted-user">@${data.author_username || 'unknown'}</div>
+                        <div class="quoted-text">${linkify(data.content)}</div>
+                        ${data.media_url ? `<div class="quoted-media"><img src="${data.media_url}" loading="lazy" alt="Media" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                    `;
+                } else {
+                    modalQuotedEl.innerHTML = `
+                        <div class="quoted-user">Quoted Tweet</div>
+                        <div class="quoted-unavailable">
+                            <span>Tweet unavailable</span>
+                            <a href="https://x.com/i/web/status/${quotedId}" target="_blank">Try viewing on X →</a>
+                        </div>
+                    `;
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching quoted tweet:', err);
+                modalQuotedEl.innerHTML = `
+                    <div class="quoted-user">Quoted Tweet</div>
+                    <a href="https://x.com/i/web/status/${quotedId}" target="_blank">View on X →</a>
+                `;
+            });
+    }
 
     // Add event handlers
     document.querySelectorAll('.swipe-btn').forEach(btn => {
@@ -839,6 +912,117 @@ function formatNumber(num) {
 }
 
 // ============================================
+// AI Semantic Search
+// ============================================
+
+const aiElements = {
+    input: document.getElementById('aiSearchInput'),
+    button: document.getElementById('aiSearchBtn'),
+    status: document.getElementById('aiSearchStatus'),
+    results: document.getElementById('aiSearchResults'),
+    grid: document.getElementById('aiTweetGrid'),
+    resultCount: document.getElementById('aiResultCount'),
+    clearBtn: document.getElementById('clearAiSearch')
+};
+
+async function performAiSearch() {
+    const query = aiElements.input.value.trim();
+    if (!query) return;
+
+    aiElements.button.disabled = true;
+    aiElements.status.textContent = '🔮 Analyzing your query...';
+    aiElements.status.className = 'ai-search-status loading';
+
+    try {
+        const response = await fetch('/api/semantic-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        });
+
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+
+        const data = await response.json();
+
+        // Show results
+        aiElements.results.style.display = 'block';
+        aiElements.resultCount.textContent = `${data.count} tweets found`;
+        aiElements.status.textContent = '';
+
+        // Render tweets
+        if (data.tweets.length === 0) {
+            aiElements.grid.innerHTML = '<div class="empty-state"><p>No tweets match your query</p></div>';
+        } else {
+            aiElements.grid.innerHTML = data.tweets.map(tweet => createTweetCardHtml(tweet)).join('');
+
+            // Add click handlers
+            aiElements.grid.querySelectorAll('.tweet-card').forEach(card => {
+                card.addEventListener('click', () => openTweetModal(card.dataset.id));
+            });
+        }
+
+    } catch (err) {
+        aiElements.status.textContent = '❌ ' + err.message;
+        aiElements.status.className = 'ai-search-status error';
+    } finally {
+        aiElements.button.disabled = false;
+    }
+}
+
+function clearAiSearch() {
+    aiElements.results.style.display = 'none';
+    aiElements.grid.innerHTML = '';
+    aiElements.input.value = '';
+    aiElements.status.textContent = '';
+}
+
+function createTweetCardHtml(tweet) {
+    const date = new Date(tweet.created_at).toLocaleDateString();
+    const swipeBadge = tweet.swipe_status === 'superliked' ? '⭐' :
+        tweet.swipe_status === 'liked' ? '❤️' : '';
+
+    const tagsHtml = (tweet.tags || []).slice(0, 4).map(tag =>
+        `<span class="tweet-tag ${tag.category}">${tag.name}</span>`
+    ).join('');
+
+    return `
+        <div class="tweet-card ${tweet.swipe_status || ''}" data-id="${tweet.id}">
+            <div class="tweet-header">
+                <span class="tweet-date">${date}</span>
+                <span class="swipe-badge">${swipeBadge}</span>
+            </div>
+            <div class="tweet-text">${linkify(tweet.full_text)}</div>
+            <div class="tweet-footer">
+                <div class="tweet-meta">
+                    <div class="tweet-stats">
+                        <span class="tweet-stat">❤️ ${tweet.favorite_count}</span>
+                        <span class="tweet-stat">🔄 ${tweet.retweet_count}</span>
+                    </div>
+                </div>
+                <div class="tweet-tags">${tagsHtml}</div>
+                <a href="${tweet.tweet_url}" target="_blank" class="tweet-link" onclick="event.stopPropagation()">View on X →</a>
+            </div>
+        </div>
+    `;
+}
+
+function setupAiSearchHandlers() {
+    if (aiElements.button) {
+        aiElements.button.addEventListener('click', performAiSearch);
+    }
+    if (aiElements.input) {
+        aiElements.input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performAiSearch();
+        });
+    }
+    if (aiElements.clearBtn) {
+        aiElements.clearBtn.addEventListener('click', clearAiSearch);
+    }
+}
+
+// ============================================
 // Initialize
 // ============================================
 
@@ -846,6 +1030,7 @@ async function init() {
     elements.tweetGrid.innerHTML = '<div class="loading">Loading tweets...</div>';
 
     setupEventHandlers();
+    setupAiSearchHandlers();
 
     // Load data
     await Promise.all([
