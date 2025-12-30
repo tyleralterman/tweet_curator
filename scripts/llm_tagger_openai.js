@@ -1,13 +1,19 @@
 /**
  * LLM-Based Semantic Tagging Script (OpenAI)
  * Analyzes tweets using GPT-4o-mini to assign accurate tags based on meaning
+ * 
+ * Usage: OPENAI_API_KEY=your-key-here node scripts/llm_tagger_openai.js
  */
 
 const Database = require('better-sqlite3');
 const path = require('path');
 
 // Configuration
-const OPENAI_API_KEY = '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';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+    console.error('❌ Please set OPENAI_API_KEY environment variable');
+    process.exit(1);
+}
 const BATCH_SIZE = 25; // Tweets per API call
 const DELAY_MS = 500; // Delay between batches
 const MAX_RETRIES = 3;
