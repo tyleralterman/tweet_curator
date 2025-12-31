@@ -191,22 +191,39 @@ body::before {
     width: 100%;
     height: 100%;
     background: var(--bg-card);
+    /* Solid background - critical! */
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 24px 24px 80px 24px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* Changed from overflow-y: auto */
     max-height: 100%;
-    /* Hide scrollbar but keep functionality */
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-color) transparent;
     cursor: grab;
     user-select: none;
     transform-origin: center center;
     will-change: transform;
-    transition: box-shadow 0.2s;
+    transition: box-shadow 0.2s, transform 0.3s ease;
+    /* Stack cards with z-index - top card is highest */
+    z-index: 3;
+}
+
+/* Cards below the top card - hide them to prevent text bleed-through */
+.tweet-card:nth-child(2) {
+    z-index: 2;
+    transform: scale(0.95) translateY(10px);
+    opacity: 0.5;
+}
+
+.tweet-card:nth-child(3) {
+    z-index: 1;
+    transform: scale(0.9) translateY(20px);
+    opacity: 0.3;
+}
+
+/* Hide any cards beyond the third */
+.tweet-card:nth-child(n+4) {
+    display: none;
 }
 
 .tweet-card:active {
@@ -319,7 +336,6 @@ body::before {
 .card-content {
     flex: 1 1 auto;
     min-height: 100px;
-    /* Changed from 0 - iOS Safari needs explicit min-height */
     height: auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -330,6 +346,9 @@ body::before {
     word-wrap: break-word;
     color: var(--cream);
     display: block;
+    background: var(--bg-card);
+    /* Solid background - must match .tweet-card */
+    border-radius: var(--radius-sm);
 }
 
 .tweet-text a {
