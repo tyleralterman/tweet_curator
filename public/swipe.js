@@ -133,42 +133,48 @@ function updateProgress(remaining) {
 }
 
 function renderCards() {
-    const cardStack = elements.cardStack;
-    const cards = Array.from(cardStack.children).filter(el => el.classList.contains('tweet-card'));
+    try {
+        const cardStack = elements.cardStack;
+        if (!cardStack) return;
 
-    if (cards.length >= 3) {
-        document.querySelector('.loading-state')?.remove();
-        return;
-    }
+        const cards = Array.from(cardStack.children).filter(el => el.classList.contains('tweet-card'));
 
-    if (state.queue.length < 5) loadMoreTweets();
+        if (cards.length >= 3) {
+            document.querySelector('.loading-state')?.remove();
+            return;
+        }
 
-    const cardsNeeded = 3 - cards.length;
-    let added = false;
+        if (state.queue.length < 5) loadMoreTweets();
 
-    for (let i = 0; i < cardsNeeded; i++) {
-        const tweet = state.queue.shift();
-        if (!tweet) break;
-        cardStack.appendChild(createCardElement(tweet));
-        added = true;
-    }
+        const cardsNeeded = 3 - cards.length;
+        let added = false;
 
-    if (added || cards.length > 0) document.querySelector('.loading-state')?.remove();
+        for (let i = 0; i < cardsNeeded; i++) {
+            const tweet = state.queue.shift();
+            if (!tweet) break;
+            cardStack.appendChild(createCardElement(tweet));
+            added = true;
+        }
 
-    if (cardStack.children.length === 0 && !state.loading && state.queue.length === 0) {
-        cardStack.innerHTML = `
-            <div class="loading-state">
-                <div class="spinner"></div>
-                <p>No tweets match your filters.</p>
-            </div>
-        `;
-    } else if (state.loading && cardStack.children.length === 0) {
-        // Show loading if empty and loading
-        cardStack.innerHTML = `
-            <div class="loading-state">
-                <div class="spinner"></div>
-                <p>Loading curated tweets...</p>
-        `;
+        if (added || cards.length > 0) document.querySelector('.loading-state')?.remove();
+
+        if (cardStack.children.length === 0 && !state.loading && state.queue.length === 0) {
+            cardStack.innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>No tweets match your filters.</p>
+                </div>
+            `;
+        } else if (state.loading && cardStack.children.length === 0) {
+            cardStack.innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading curated tweets...</p>
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error('Error in renderCards:', err);
     }
 }
 
@@ -371,52 +377,69 @@ function initDrag(el) {
 }
 
 function swipeCard(direction) {
-    const card = elements.cardStack.querySelector('.tweet-card');
-    if (!card) return;
+    try {
+        const card = elements.cardStack?.querySelector('.tweet-card');
+        if (!card) {
+            console.log('No card found to swipe');
+            renderCards(); // Try to render more cards
+            return;
+        }
 
-    const id = card.dataset.id;
-    let status = '';
-    let animationClass = '';
+        const id = card.dataset.id;
+        let status = '';
+        let animationClass = '';
 
-    switch (direction) {
-        case 'right':
-            status = 'like';
-            animationClass = 'fly-right';
-            triggerHeart();
-            break;
-        case 'left':
-            status = 'dislike';
-            animationClass = 'fly-left';
-            break;
-        case 'up':
-            status = 'superlike';
-            animationClass = 'fly-up';
-            triggerConfetti();
-            break;
-        case 'down':
-            status = 'review_later';
-            animationClass = 'fly-down';
-            break;
+        switch (direction) {
+            case 'right':
+                status = 'like';
+                animationClass = 'fly-right';
+                triggerHeart();
+                break;
+            case 'left':
+                status = 'dislike';
+                animationClass = 'fly-left';
+                break;
+            case 'up':
+                status = 'superlike';
+                animationClass = 'fly-up';
+                triggerConfetti();
+                break;
+            case 'down':
+                status = 'review_later';
+                animationClass = 'fly-down';
+                break;
+        }
+
+        card.classList.add(animationClass);
+
+        // Save to history for undo
+        state.history.push({
+            id,
+            tweet: state.queue[0] || {}, // Use queue data since currentCard may not be set
+            status
+        });
+        if (elements.btnUndo) elements.btnUndo.disabled = false;
+
+        // Submit to API
+        submitSwipe(id, status);
+
+        // Update stats immediately
+        state.stats.today++;
+        state.stats.remaining--;
+        updateStatsUI();
+
+        // Remove from DOM after animation
+        setTimeout(() => {
+            try {
+                card.remove();
+                renderCards();
+            } catch (err) {
+                console.error('Error in card removal:', err);
+            }
+        }, 300);
+    } catch (err) {
+        console.error('Error in swipeCard:', err);
     }
-
-    card.classList.add(animationClass);
-
-    // Save to history for undo
-    state.history.push({
-        id,
-        tweet: { ...state.currentCard }, // Store data if needed
-        status
-    });
-    elements.btnUndo.disabled = false;
-
-    // Submit to API
-    submitSwipe(id, status);
-
-    // Remove from DOM after animation
-    setTimeout(() => {
-        card.remove();
-        renderCards();
-    }, 300);
 }
 
 function undoSwipe() {
