@@ -298,7 +298,11 @@ function linkify(text) {
 // ============================================
 
 function initDrag(el) {
-    const hammertime = new Hammer(el);
+    const hammertime = new Hammer(el, {
+        recognizers: [
+            [Hammer.Pan, { direction: Hammer.DIRECTION_ALL, threshold: 10 }]
+        ]
+    });
 
     hammertime.on('pan', (ev) => {
         el.classList.add('moving');
@@ -309,27 +313,28 @@ function initDrag(el) {
 
         el.style.transform = `translate(${xPos}px, ${yPos}px) rotate(${rotate}deg)`;
 
-        // Indicators
-        const like = el.querySelector('.swipe-indicator.like');
-        const dislike = el.querySelector('.swipe-indicator.dislike');
-        const superlike = el.querySelector('.swipe-indicator.superlike');
-        const later = el.querySelector('.swipe-indicator.review-later');
+        // Get overlays (use correct class names)
+        const likeOverlay = el.querySelector('.overlay-like');
+        const dislikeOverlay = el.querySelector('.overlay-dislike');
+        const superlikeOverlay = el.querySelector('.overlay-superlike');
 
         // Reset opacities
-        like.style.opacity = 0;
-        dislike.style.opacity = 0;
-        superlike.style.opacity = 0;
-        later.style.opacity = 0;
+        if (likeOverlay) likeOverlay.style.opacity = 0;
+        if (dislikeOverlay) dislikeOverlay.style.opacity = 0;
+        if (superlikeOverlay) superlikeOverlay.style.opacity = 0;
 
+        // Show appropriate overlay based on direction
         if (xPos > 0 && Math.abs(xPos) > Math.abs(yPos)) {
-            like.style.opacity = Math.min(xPos / 100, 1);
+            // Swiping right = LIKE
+            if (likeOverlay) likeOverlay.style.opacity = Math.min(xPos / 100, 1);
         } else if (xPos < 0 && Math.abs(xPos) > Math.abs(yPos)) {
-            dislike.style.opacity = Math.min(Math.abs(xPos) / 100, 1);
+            // Swiping left = DISLIKE
+            if (dislikeOverlay) dislikeOverlay.style.opacity = Math.min(Math.abs(xPos) / 100, 1);
         } else if (yPos < 0 && Math.abs(yPos) > Math.abs(xPos)) {
-            superlike.style.opacity = Math.min(Math.abs(yPos) / 100, 1);
-        } else if (yPos > 0 && Math.abs(yPos) > Math.abs(xPos)) {
-            later.style.opacity = Math.min(yPos / 100, 1);
+            // Swiping up = SUPERLIKE
+            if (superlikeOverlay) superlikeOverlay.style.opacity = Math.min(Math.abs(yPos) / 100, 1);
         }
+        // Down = review later (no overlay currently, just action)
     });
 
     hammertime.on('panend', (ev) => {
@@ -340,10 +345,11 @@ function initDrag(el) {
         const keep = Math.abs(xPos) < SWIPE_THRESHOLD && Math.abs(yPos) < SWIPE_THRESHOLD;
 
         if (keep) {
+            // Not enough movement - reset position
             el.style.transform = '';
-            el.querySelectorAll('.swipe-indicator').forEach(i => i.style.opacity = 0);
+            el.querySelectorAll('.card-overlay').forEach(o => o.style.opacity = 0);
         } else {
-            // Determine direction
+            // Determine direction and swipe
             if (Math.abs(xPos) > Math.abs(yPos)) {
                 if (xPos > 0) swipeCard('right');
                 else swipeCard('left');

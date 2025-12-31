@@ -892,3 +892,83 @@ body::before {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     letter-spacing: 1px;
 }
+
+/* ============================================
+   Mobile Touch Improvements
+   ============================================ */
+
+/* Ensure cards are grabbable on touch */
+.tweet-card {
+    touch-action: none;
+    /* Let Hammer.js handle touches */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* While dragging */
+.tweet-card.moving {
+    transition: none !important;
+    z-index: 100 !important;
+}
+
+/* Better overlay visibility on mobile */
+@media (max-width: 600px) {
+    .card-overlay {
+        font-size: 1.2rem;
+        padding: 6px 12px;
+        top: 20px;
+        right: 20px;
+    }
+
+    .card-overlay.overlay-like {
+        left: 20px;
+        right: auto;
+    }
+
+    .card-overlay.overlay-superlike {
+        bottom: 60px;
+    }
+
+    /* Larger touch targets for buttons */
+    .action-btn {
+        width: 60px;
+        height: 60px;
+        min-width: 60px;
+        min-height: 60px;
+    }
+
+    .action-btn.undo {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* More space for buttons at bottom */
+    .action-buttons {
+        padding-bottom: 20px;
+        gap: 12px;
+    }
+
+    /* Adjust card padding */
+    .tweet-card {
+        padding: 16px 16px 70px 16px;
+    }
+
+    .card-content {
+        font-size: 1rem;
+    }
+
+    /* Reduce header size on mobile */
+    .swipe-header h1 {
+        font-size: 1rem;
+    }
+}
+
+/* Prevent iOS rubber-banding interfering with swipe */
+@supports (-webkit-touch-callout: none) {
+    .swipe-app {
+        height: -webkit-fill-available;
+    }
+}
