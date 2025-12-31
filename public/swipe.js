@@ -123,6 +123,15 @@ function updateStatsUI() {
     elements.progressBar.style.width = `${progress}%`;
 }
 
+function updateProgress(remaining) {
+    // Update progress bar based on remaining tweets
+    const total = remaining + state.stats.today;
+    const progress = total > 0 ? (state.stats.today / total) * 100 : 0;
+    if (elements.progressBar) {
+        elements.progressBar.style.width = `${progress}%`;
+    }
+}
+
 function renderCards() {
     const cardStack = elements.cardStack;
     const cards = Array.from(cardStack.children).filter(el => el.classList.contains('tweet-card'));
