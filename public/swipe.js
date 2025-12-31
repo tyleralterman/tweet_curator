@@ -498,13 +498,23 @@ function setupKeyboardShortcuts() {
 
 // Hammer.js dummy implementation if not present (for non-touch dev environment fallback)
 if (typeof Hammer === 'undefined') {
+    console.warn('Hammer.js not loaded, using fallback');
     window.Hammer = class {
-        constructor(el) { this.el = el; }
+        constructor(el, options) { this.el = el; }
         on(event, handler) {
-            // Simplified mouse fallback can be added here if needed
+            // No-op fallback
         }
     };
+    // Add missing constants
+    window.Hammer.DIRECTION_ALL = 30;
+    window.Hammer.Pan = function () { };
 }
 
-// Start
-init();
+// Start - ensure DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        init().catch(err => console.error('Init error:', err));
+    });
+} else {
+    init().catch(err => console.error('Init error:', err));
+}

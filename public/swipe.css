@@ -187,8 +187,8 @@ body::before {
     padding: 24px 24px 80px 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    overflow-y: auto;
+    overflow: hidden;
+    /* Changed from overflow-y: auto */
     max-height: 100%;
     /* Hide scrollbar but keep functionality */
     scrollbar-width: thin;
@@ -308,20 +308,30 @@ body::before {
 
 /* Tweet Content */
 .card-content {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    /* Critical for iOS Safari flex */
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scroll on iOS */
     font-size: 1.15rem;
     line-height: 1.6;
     white-space: pre-wrap;
     word-wrap: break-word;
     color: var(--cream);
-    display: flex;
-    flex-direction: column;
+    display: block;
+    /* Changed from flex to block for better iOS compat */
 }
 
 .tweet-text a {
     color: var(--accent);
     text-decoration: none;
+}
+
+.tweet-text {
+    margin-bottom: 12px;
+    min-height: 20px;
+    /* Ensure it takes space even if short */
 }
 
 /* Media */
