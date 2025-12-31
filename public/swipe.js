@@ -26,7 +26,7 @@ const elements = {
 
 // Config
 const BATCH_SIZE = 10;
-const SWIPE_THRESHOLD = 80;
+const SWIPE_THRESHOLD = 120; // Increased from 80 for mobile - requires more intentional swipe
 
 // ============================================
 // Initialization

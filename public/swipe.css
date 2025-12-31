@@ -45,8 +45,13 @@ body {
     background: var(--bg-primary);
     color: var(--text-primary);
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    /* iOS Safari fix */
     overflow: hidden;
-    touch-action: pan-y;
+    touch-action: none;
+    /* Let app handle all swipes including vertical */
+    overscroll-behavior: none;
+    /* Prevent pull-to-refresh */
 }
 
 /* Subtle texture */
@@ -903,13 +908,25 @@ body::before {
    Mobile Touch Improvements
    ============================================ */
 
+/* Prevent iOS Safari from intercepting swipes */
+.swipe-app,
+.swipe-main,
+.card-container,
+.card-stack {
+    touch-action: pan-x pan-y;
+    /* Allow app to handle all touch */
+    -webkit-touch-callout: none;
+    /* Disable callout on long press */
+}
+
 /* Ensure cards are grabbable on touch */
 .tweet-card {
     touch-action: none;
-    /* Let Hammer.js handle touches */
+    /* Let Hammer.js handle all touches on cards */
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
 }
 
 /* While dragging */
