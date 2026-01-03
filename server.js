@@ -93,6 +93,12 @@ app.get('/api/tweets', (req, res) => {
         const conditions = [];
         const params = [];
 
+        // Always hide subsequent tweets in self-threads (2nd, 3rd, etc. tweets in a thread)
+        // These are tweets where in_reply_to_tweet_id is set AND it's a self-reply (part of thread)
+        // They'll still show when viewing individual tweet's thread section
+        conditions.push(`(t.in_reply_to_tweet_id IS NULL OR t.tweet_type NOT IN ('thread'))`);
+
+
         if (search) {
             conditions.push(`t.full_text LIKE ?`);
             params.push(`%${search}%`);
@@ -134,7 +140,9 @@ app.get('/api/tweets', (req, res) => {
         }
 
         if (excludeThreads === 'true') {
-            conditions.push(`t.tweet_type != 'thread'`);
+            // Only hide subsequent tweets in threads (those that are replies to another tweet)
+            // Keep thread-starter tweets visible (they have tweet_type='thread' but no in_reply_to)
+            conditions.push(`(t.tweet_type != 'thread' OR t.in_reply_to_tweet_id IS NULL)`);
         }
 
         let joinClause = '';

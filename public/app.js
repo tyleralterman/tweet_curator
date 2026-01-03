@@ -15,10 +15,10 @@ let state = {
         length: '',
         // quality: '', REMOVED
         swipe: '',
-        tag: '',
+        tags: [], // Changed to array for multi-tag filtering
         excludeRetweets: true,
         excludeReplies: true,
-        excludeThreads: true
+        excludeThreads: false // Changed to false - show thread starters
     },
     sort: { by: 'created_at', order: 'desc' },
     selectedTweet: null
@@ -76,7 +76,7 @@ async function fetchTweets() {
         length: state.filters.length,
         // quality removed
         swipe: state.filters.swipe,
-        tag: state.filters.tag,
+        tag: state.filters.tags.join(','), // Send as comma-separated for multi-tag
         excludeRetweets: state.filters.excludeRetweets,
         excludeReplies: state.filters.excludeReplies,
         excludeThreads: state.filters.excludeThreads
@@ -364,9 +364,12 @@ async function loadQuotedTweets() {
 }
 
 function renderTags() {
+    // Helper to check if tag is selected
+    const isSelected = (tagName) => state.filters.tags.includes(tagName);
+
     // Topic tags
     elements.topicTags.innerHTML = state.tags.topic.map(tag => `
-        <button class="tag-btn ${state.filters.tag === tag.name ? 'active' : ''}" 
+        <button class="tag-btn ${isSelected(tag.name) ? 'active' : ''}" 
                 data-tag="${tag.name}"
                 style="border-color: ${tag.color}">
             ${tag.name} <span class="count">${tag.tweet_count}</span>
@@ -375,7 +378,7 @@ function renderTags() {
 
     // Pattern tags
     elements.patternTags.innerHTML = state.tags.pattern.map(tag => `
-        <button class="tag-btn ${state.filters.tag === tag.name ? 'active' : ''}" 
+        <button class="tag-btn ${isSelected(tag.name) ? 'active' : ''}" 
                 data-tag="${tag.name}"
                 style="border-color: ${tag.color}">
             ${tag.name} <span class="count">${tag.tweet_count}</span>
@@ -385,7 +388,7 @@ function renderTags() {
     // Use tags
     if (elements.useTags && state.tags.use) {
         elements.useTags.innerHTML = state.tags.use.map(tag => `
-            <button class="tag-btn use ${state.filters.tag === tag.name ? 'active' : ''}" 
+            <button class="tag-btn use ${isSelected(tag.name) ? 'active' : ''}" 
                     data-tag="${tag.name}"
                     style="border-color: ${tag.color}">
                 ${tag.name} <span class="count">${tag.tweet_count}</span>
@@ -393,11 +396,18 @@ function renderTags() {
         `).join('');
     }
 
-    // Add click handlers
+    // Add click handlers - toggle tags in/out of array
     document.querySelectorAll('.tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tagName = btn.dataset.tag;
-            state.filters.tag = state.filters.tag === tagName ? '' : tagName;
+            const idx = state.filters.tags.indexOf(tagName);
+            if (idx >= 0) {
+                // Remove tag from filter
+                state.filters.tags.splice(idx, 1);
+            } else {
+                // Add tag to filter
+                state.filters.tags.push(tagName);
+            }
             state.pagination.page = 1;
             fetchTweets();
             renderTags();
@@ -432,7 +442,7 @@ function updateExportUrls() {
     if (state.filters.swipe) params.set('swipe', state.filters.swipe);
     if (state.filters.type) params.set('type', state.filters.type);
     if (state.filters.length) params.set('length', state.filters.length);
-    if (state.filters.tag) params.set('tag', state.filters.tag);
+    if (state.filters.tags.length > 0) params.set('tag', state.filters.tags.join(','));
     params.set('excludeRetweets', state.filters.excludeRetweets);
     params.set('excludeReplies', state.filters.excludeReplies);
     params.set('excludeThreads', state.filters.excludeThreads);
@@ -637,6 +647,10 @@ async function openTweetModal(tweetId) {
         btn.addEventListener('click', () => {
             const status = btn.dataset.status;
             updateTweet(tweet.id, { swipe_status: status });
+            // Update local state for persistence
+            if (state.selectedTweet) {
+                state.selectedTweet.swipe_status = status;
+            }
             document.querySelectorAll('.swipe-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         });
