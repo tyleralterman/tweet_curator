@@ -415,6 +415,12 @@ function swipeCard(direction) {
                 break;
         }
 
+        // CRITICAL: Clear inline styles so CSS animation works on iOS Safari
+        card.style.transform = '';
+        card.style.transition = '';
+        card.classList.remove('dragging');
+
+        // Add fly-out animation
         card.classList.add(animationClass);
 
         // Save to history for undo
