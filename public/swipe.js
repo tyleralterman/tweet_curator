@@ -381,7 +381,7 @@ function swipeCard(direction) {
         const card = elements.cardStack?.querySelector('.tweet-card');
         if (!card) {
             console.log('No card found to swipe');
-            renderCards(); // Try to render more cards
+            loadMoreTweets(); // Force reload
             return;
         }
 
@@ -415,7 +415,7 @@ function swipeCard(direction) {
         // Save to history for undo
         state.history.push({
             id,
-            tweet: state.queue[0] || {}, // Use queue data since currentCard may not be set
+            tweet: state.queue[0] || {},
             status
         });
         if (elements.btnUndo) elements.btnUndo.disabled = false;
@@ -428,15 +428,20 @@ function swipeCard(direction) {
         state.stats.remaining--;
         updateStatsUI();
 
-        // Remove from DOM after animation
+        // Remove from DOM after animation completes (600ms to match CSS)
         setTimeout(() => {
             try {
                 card.remove();
+                // Always try to render more cards
                 renderCards();
+                // Proactively load more if queue is getting low
+                if (state.queue.length < 5) {
+                    loadMoreTweets();
+                }
             } catch (err) {
                 console.error('Error in card removal:', err);
             }
-        }, 300);
+        }, 600); // Match the CSS animation duration
     } catch (err) {
         console.error('Error in swipeCard:', err);
     }

@@ -190,73 +190,51 @@ body::before {
     position: absolute;
     width: 100%;
     height: 100%;
-    background: var(--bg-card);
-    /* Solid background - critical! */
+    background: var(--bg-card) !important;
+    /* Solid background - critical for all cards! */
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 24px 24px 80px 24px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    /* Allow scrolling for long tweets */
+    -webkit-overflow-scrolling: touch;
     max-height: 100%;
     cursor: grab;
     user-select: none;
     transform-origin: center center;
     will-change: transform;
-    transition: box-shadow 0.2s, transform 0.3s ease;
-    /* Stack cards with z-index - top card is highest */
-    z-index: 3;
+    transition: transform 0.3s ease-out;
+    /* All cards get full opacity - no transparency! */
+    opacity: 1 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* Cards below the top card - hide them to prevent text bleed-through */
+/* Simple z-index stacking - NO opacity or background changes! */
+.tweet-card:first-child {
+    z-index: 10;
+}
+
 .tweet-card:nth-child(2) {
-    z-index: 2;
-    transform: scale(0.95) translateY(10px);
-    opacity: 0.5;
+    z-index: 9;
+    transform: scale(0.98) translateY(5px);
 }
 
 .tweet-card:nth-child(3) {
-    z-index: 1;
-    transform: scale(0.9) translateY(20px);
-    opacity: 0.3;
+    z-index: 8;
+    transform: scale(0.96) translateY(10px);
 }
 
-/* Hide any cards beyond the third */
+/* Hide cards beyond third to save DOM size */
 .tweet-card:nth-child(n+4) {
-    display: none;
+    visibility: hidden;
 }
 
 .tweet-card:active {
     cursor: grabbing;
 }
 
-.tweet-card.animating {
-    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
-}
-
-/* Card stacking effect */
-.tweet-card:nth-child(1) {
-    z-index: 3;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.tweet-card:nth-child(2) {
-    z-index: 2;
-    transform: scale(0.95) translateY(10px);
-    opacity: 0.7;
-    background: var(--bg-secondary);
-}
-
-.tweet-card:nth-child(3) {
-    z-index: 1;
-    transform: scale(0.9) translateY(20px);
-    opacity: 0.4;
-    background: var(--bg-tertiary);
-}
-
-.tweet-card:nth-child(n+4) {
-    display: none;
-}
 
 /* Swipe Indicators / Overlays */
 .card-overlay {
@@ -773,19 +751,19 @@ body::before {
 }
 
 .tweet-card.fly-right {
-    animation: flyOutRight 0.4s ease-out forwards;
+    animation: flyOutRight 0.6s ease-out forwards;
 }
 
 .tweet-card.fly-left {
-    animation: flyOutLeft 0.4s ease-out forwards;
+    animation: flyOutLeft 0.6s ease-out forwards;
 }
 
 .tweet-card.fly-up {
-    animation: flyOutUp 0.4s ease-out forwards;
+    animation: flyOutUp 0.6s ease-out forwards;
 }
 
 .tweet-card.fly-down {
-    animation: flyOutDown 0.4s ease-out forwards;
+    animation: flyOutDown 0.6s ease-out forwards;
 }
 
 /* Responsive adjustments */
