@@ -1099,16 +1099,18 @@ Available tags (can filter via JOIN with tweet_tags): ${tagList}
 
 RULES:
 1. Return ONLY a JSON object with: {"where": "SQL WHERE clause", "orderBy": "optional ORDER BY", "tagFilter": "optional tag name"}
-2. For emotional/sentiment queries, use LIKE patterns on full_text
-3. For engagement queries, use favorite_count or retweet_count
-4. For topic queries, use tagFilter with the most relevant tag name
-5. Keep it simple - SQLite compatible only
-6. If the query mentions multiple topics, pick the most relevant tag
+2. For SPECIFIC TOPIC queries (e.g. "effective altruism", "bitcoin", "meditation"), ALWAYS use full_text LIKE patterns, not tagFilter
+3. Only use tagFilter if the query mentions a GENERAL category that matches an available tag name exactly
+4. For emotional/sentiment queries, use LIKE patterns on full_text with multiple keywords
+5. For engagement queries, use favorite_count or retweet_count
+6. Keep it simple - SQLite compatible only
+7. Use lower() for case-insensitive matching
 
 Examples:
-- "tweets where I seem excited" -> {"where": "full_text LIKE '%!%' OR full_text LIKE '%amazing%' OR full_text LIKE '%love%'", "orderBy": "favorite_count DESC"}
-- "spiritual tweets about Trump" -> {"where": "lower(full_text) LIKE '%trump%'", "tagFilter": "spirituality"}
-- "my most popular hot takes" -> {"tagFilter": "hot-take", "orderBy": "favorite_count DESC"}`;
+- "tweets about effective altruism" -> {"where": "lower(full_text) LIKE '%effective altruism%' OR lower(full_text) LIKE '%ea community%' OR lower(full_text) LIKE '%longtermism%'", "orderBy": "favorite_count DESC"}
+- "tweets where I seem excited" -> {"where": "full_text LIKE '%!%' AND (lower(full_text) LIKE '%amazing%' OR lower(full_text) LIKE '%love%' OR lower(full_text) LIKE '%excited%')", "orderBy": "favorite_count DESC"}
+- "spiritual tweets about Trump" -> {"where": "lower(full_text) LIKE '%trump%' AND lower(full_text) LIKE '%spirit%'", "orderBy": "favorite_count DESC"}
+- "my most popular philosophy tweets" -> {"tagFilter": "philosophy", "orderBy": "favorite_count DESC"}`;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
