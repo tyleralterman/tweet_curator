@@ -149,8 +149,5 @@ INSERT OR IGNORE INTO tags (name, category, color) VALUES
     ('engagement-bait', 'pattern', '#E53E3E'),
     ('dated-reference', 'pattern', '#718096');
 
--- Use tags (for content destination)
-INSERT OR IGNORE INTO tags (name, category, color) VALUES
-    ('book', 'use', '#1A365D'),
-    ('blog-post', 'use', '#2C5282'),
-    ('short-post', 'use', '#4299E1');
+-- NOTE: Use tags (book, blog-post, short-post) are MANUAL ONLY - not auto-created
+-- Create them manually if needed via the UI
