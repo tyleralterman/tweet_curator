@@ -67,6 +67,170 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================
+// Search Utilities - Google-style search with stemming
+// ============================================
+
+/**
+ * Simple Porter Stemmer for English
+ * Handles common word endings: -ing, -ed, -s, -es, -ies, -tion, -ness, etc.
+ */
+function stem(word) {
+    if (!word || word.length < 3) return word.toLowerCase();
+
+    let w = word.toLowerCase();
+
+    // Common irregular forms
+    const irregulars = {
+        'ran': 'run', 'running': 'run', 'runs': 'run',
+        'children': 'child', 'childs': 'child',
+        'men': 'man', 'women': 'woman',
+        'feet': 'foot', 'teeth': 'tooth',
+        'mice': 'mouse', 'geese': 'goose',
+        'was': 'be', 'were': 'be', 'been': 'be', 'being': 'be', 'is': 'be', 'are': 'be', 'am': 'be',
+        'had': 'have', 'has': 'have', 'having': 'have',
+        'did': 'do', 'does': 'do', 'doing': 'do',
+        'went': 'go', 'goes': 'go', 'going': 'go', 'gone': 'go',
+        'said': 'say', 'says': 'say', 'saying': 'say',
+        'made': 'make', 'makes': 'make', 'making': 'make',
+        'took': 'take', 'takes': 'take', 'taking': 'take', 'taken': 'take',
+        'came': 'come', 'comes': 'come', 'coming': 'come',
+        'saw': 'see', 'sees': 'see', 'seeing': 'see', 'seen': 'see',
+        'knew': 'know', 'knows': 'know', 'knowing': 'know', 'known': 'know',
+        'thought': 'think', 'thinks': 'think', 'thinking': 'think',
+        'got': 'get', 'gets': 'get', 'getting': 'get', 'gotten': 'get',
+        'gave': 'give', 'gives': 'give', 'giving': 'give', 'given': 'give',
+        'told': 'tell', 'tells': 'tell', 'telling': 'tell',
+        'felt': 'feel', 'feels': 'feel', 'feeling': 'feel',
+        'became': 'become', 'becomes': 'become', 'becoming': 'become',
+        'left': 'leave', 'leaves': 'leave', 'leaving': 'leave',
+        'brought': 'bring', 'brings': 'bring', 'bringing': 'bring',
+        'wrote': 'write', 'writes': 'write', 'writing': 'write', 'written': 'write',
+        'sat': 'sit', 'sits': 'sit', 'sitting': 'sit',
+        'stood': 'stand', 'stands': 'stand', 'standing': 'stand',
+        'lost': 'lose', 'loses': 'lose', 'losing': 'lose',
+        'paid': 'pay', 'pays': 'pay', 'paying': 'pay',
+        'met': 'meet', 'meets': 'meet', 'meeting': 'meet',
+        'set': 'set', 'sets': 'set', 'setting': 'set',
+        'learned': 'learn', 'learns': 'learn', 'learning': 'learn', 'learnt': 'learn',
+        'kept': 'keep', 'keeps': 'keep', 'keeping': 'keep',
+        'built': 'build', 'builds': 'build', 'building': 'build',
+        'sent': 'send', 'sends': 'send', 'sending': 'send',
+        'spent': 'spend', 'spends': 'spend', 'spending': 'spend',
+        'understood': 'understand', 'understands': 'understand', 'understanding': 'understand',
+        'began': 'begin', 'begins': 'begin', 'beginning': 'begin', 'begun': 'begin',
+        'held': 'hold', 'holds': 'hold', 'holding': 'hold',
+        'heard': 'hear', 'hears': 'hear', 'hearing': 'hear',
+        'found': 'find', 'finds': 'find', 'finding': 'find',
+        'read': 'read', 'reads': 'read', 'reading': 'read',
+        'meant': 'mean', 'means': 'mean', 'meaning': 'mean',
+        'led': 'lead', 'leads': 'lead', 'leading': 'lead',
+        'put': 'put', 'puts': 'put', 'putting': 'put',
+        'showed': 'show', 'shows': 'show', 'showing': 'show', 'shown': 'show',
+        'moved': 'move', 'moves': 'move', 'moving': 'move',
+        'lived': 'live', 'lives': 'live', 'living': 'live',
+        'believed': 'believe', 'believes': 'believe', 'believing': 'believe',
+        'loved': 'love', 'loves': 'love', 'loving': 'love'
+    };
+
+    if (irregulars[w]) return irregulars[w];
+
+    // Remove common suffixes
+    if (w.endsWith('ies') && w.length > 4) w = w.slice(0, -3) + 'y';
+    else if (w.endsWith('ied') && w.length > 4) w = w.slice(0, -3) + 'y';
+    else if (w.endsWith('es') && w.length > 4) w = w.slice(0, -2);
+    else if (w.endsWith('s') && !w.endsWith('ss') && w.length > 3) w = w.slice(0, -1);
+
+    if (w.endsWith('ing') && w.length > 5) {
+        w = w.slice(0, -3);
+        // Handle doubling: running -> run, sitting -> sit
+        if (w.length > 2 && w[w.length - 1] === w[w.length - 2]) w = w.slice(0, -1);
+    }
+    else if (w.endsWith('ed') && w.length > 4) {
+        w = w.slice(0, -2);
+        if (w.length > 2 && w[w.length - 1] === w[w.length - 2]) w = w.slice(0, -1);
+    }
+    else if (w.endsWith('ness') && w.length > 6) w = w.slice(0, -4);
+    else if (w.endsWith('ment') && w.length > 6) w = w.slice(0, -4);
+    else if (w.endsWith('ly') && w.length > 4) w = w.slice(0, -2);
+    else if (w.endsWith('ful') && w.length > 5) w = w.slice(0, -3);
+    else if (w.endsWith('less') && w.length > 6) w = w.slice(0, -4);
+    else if (w.endsWith('tion') && w.length > 6) w = w.slice(0, -4);
+    else if (w.endsWith('er') && w.length > 4) w = w.slice(0, -2);
+    else if (w.endsWith('est') && w.length > 5) w = w.slice(0, -3);
+    else if (w.endsWith('able') && w.length > 6) w = w.slice(0, -4);
+    else if (w.endsWith('ible') && w.length > 6) w = w.slice(0, -4);
+
+    return w;
+}
+
+/**
+ * Parse search query Google-style:
+ * - Multiple words = AND (tweet must contain ALL words)
+ * - "quoted phrase" = exact phrase match
+ * - Each word generates stemmed variants for near-matches
+ */
+function parseSearchQuery(query) {
+    const conditions = [];
+    const params = [];
+
+    // Extract quoted phrases first
+    const phrases = [];
+    const quotedRegex = /"([^"]+)"/g;
+    let match;
+    let remaining = query;
+
+    while ((match = quotedRegex.exec(query)) !== null) {
+        phrases.push({ type: 'phrase', value: match[1] });
+        remaining = remaining.replace(match[0], ' ');
+    }
+
+    // Split remaining into individual words
+    const words = remaining.split(/\s+/).filter(w => w.length > 0);
+
+    // Add each word as a token
+    words.forEach(word => {
+        // Skip very short words and common stop words
+        if (word.length < 2) return;
+        const stopWords = ['a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been',
+            'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+            'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+            'can', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+            'from', 'or', 'and', 'but', 'if', 'then', 'so', 'than',
+            'that', 'this', 'these', 'those', 'it', 'its'];
+        if (stopWords.includes(word.toLowerCase())) return;
+
+        phrases.push({ type: 'word', value: word });
+    });
+
+    // Build conditions for each token
+    phrases.forEach(token => {
+        if (token.type === 'phrase') {
+            // Exact phrase match (case-insensitive)
+            conditions.push(`lower(t.full_text) LIKE ?`);
+            params.push(`%${token.value.toLowerCase()}%`);
+        } else {
+            // For single words, match the word OR its stem
+            const word = token.value.toLowerCase();
+            const stemmed = stem(word);
+
+            // Create conditions that match word boundaries better
+            // Match: word at start, end, or surrounded by non-word chars
+            if (word !== stemmed && stemmed.length >= 3) {
+                // Match either the original word or the stem
+                conditions.push(`(lower(t.full_text) LIKE ? OR lower(t.full_text) LIKE ?)`);
+                params.push(`%${word}%`);
+                params.push(`%${stemmed}%`);
+            } else {
+                conditions.push(`lower(t.full_text) LIKE ?`);
+                params.push(`%${word}%`);
+            }
+        }
+    });
+
+    return { conditions, params };
+}
+
+// ============================================
 // API Routes
 // ============================================
 
@@ -99,9 +263,17 @@ app.get('/api/tweets', (req, res) => {
         conditions.push(`(t.tweet_type != 'thread' OR thread_parent.tweet_type IS NULL OR thread_parent.tweet_type != 'thread')`);
 
 
+
         if (search) {
-            conditions.push(`t.full_text LIKE ?`);
-            params.push(`%${search}%`);
+            // Google-style search: 
+            // - Multiple words = AND (all must be present)
+            // - "quoted phrase" = exact phrase match
+            // - Stemming for near-matches (children→child, ran→run)
+            const searchConditions = parseSearchQuery(search);
+            if (searchConditions.conditions.length > 0) {
+                conditions.push(`(${searchConditions.conditions.join(' AND ')})`);
+                params.push(...searchConditions.params);
+            }
         }
 
         if (type) {
