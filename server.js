@@ -146,12 +146,21 @@ app.get('/api/tweets', (req, res) => {
         }
 
         let joinClause = '';
+        let havingClause = '';
         if (tag) {
-            joinClause = `
-                INNER JOIN tweet_tags tt_filter ON t.id = tt_filter.tweet_id
-                INNER JOIN tags tag_filter ON tag_filter.id = tt_filter.tag_id AND tag_filter.name = ?
-            `;
-            params.unshift(tag);
+            // Split comma-separated tags for multi-tag filtering
+            const tags = tag.split(',').filter(t => t.trim());
+            if (tags.length > 0) {
+                const tagPlaceholders = tags.map(() => '?').join(',');
+                joinClause = `
+                    INNER JOIN tweet_tags tt_filter ON t.id = tt_filter.tweet_id
+                    INNER JOIN tags tag_filter ON tag_filter.id = tt_filter.tag_id AND tag_filter.name IN (${tagPlaceholders})
+                `;
+                // Require tweets to have ALL selected tags (not just one)
+                havingClause = `HAVING COUNT(DISTINCT tag_filter.name) = ${tags.length}`;
+                // Add tag params at the beginning
+                params.unshift(...tags);
+            }
         }
 
         const whereClause = conditions.length > 0
@@ -162,7 +171,15 @@ app.get('/api/tweets', (req, res) => {
         const sortColumn = validSorts.includes(sort) ? sort : 'created_at';
         const sqlSortOrder = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-        const countQuery = `SELECT COUNT(DISTINCT t.id) as total FROM tweets t ${joinClause} ${whereClause}`;
+        // Count query needs to handle HAVING for multi-tag
+        let countQuery;
+        if (havingClause) {
+            countQuery = `SELECT COUNT(*) as total FROM (
+                SELECT t.id FROM tweets t ${joinClause} ${whereClause} GROUP BY t.id ${havingClause}
+            )`;
+        } else {
+            countQuery = `SELECT COUNT(DISTINCT t.id) as total FROM tweets t ${joinClause} ${whereClause}`;
+        }
         const { total } = db.prepare(countQuery).get(...params);
 
         const tweetsQuery = `
@@ -180,6 +197,7 @@ app.get('/api/tweets', (req, res) => {
             LEFT JOIN tags ON tags.id = tt.tag_id
             ${whereClause}
             GROUP BY t.id
+            ${havingClause}
             ORDER BY t.${sortColumn} ${sqlSortOrder}
             LIMIT ? OFFSET ?
         `;

@@ -1094,7 +1094,9 @@ body::before {
 }
 
 .swipe-btn.dislike:hover,
-.swipe-btn.dislike.active {
+.swipe-btn.dislike.active,
+.swipe-btn.pass:hover,
+.swipe-btn.pass.active {
     background: var(--dislike);
     border-color: var(--dislike);
     color: var(--cream);
