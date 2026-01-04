@@ -5,8 +5,21 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, '../database/tweets.db');
+// Database path - check multiple locations (same as server.js)
+const DB_PATHS = [
+    '/data/tweets.db',                                    // Render persistent disk
+    path.join(__dirname, '../tweets.db'),                 // Root level
+    path.join(__dirname, '../database/tweets.db')         // Subdirectory (local dev)
+];
+
+const DB_PATH = DB_PATHS.find(p => fs.existsSync(p));
+if (!DB_PATH) {
+    console.error('❌ No database found at:', DB_PATHS);
+    process.exit(1);
+}
+console.log('📂 Using database:', DB_PATH);
 const db = new Database(DB_PATH);
 
 // ==========================================
