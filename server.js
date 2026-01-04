@@ -18,39 +18,80 @@ const PORT = process.env.PORT || 3000;
 // File upload setup
 const upload = multer({ dest: path.join(__dirname, 'uploads/') });
 
-// Database setup - check multiple locations (in order of preference)
-const DB_PATHS = [
-    '/data/tweets.db',                           // Render persistent disk
-    path.join(__dirname, 'tweets.db'),           // Root level (Railway)
-    path.join(__dirname, 'database/tweets.db')   // Subdirectory (local dev)
-];
+// ============================================
+// Database Setup - with Render persistent disk support
+// ============================================
 
-// Seed database (included in repo for easy deployment)
-const SEED_DB_PATH = path.join(__dirname, 'data_tweets.db');
+console.log('🚀 Starting Tweet Curator Server...');
+console.log('📍 Environment:', process.env.NODE_ENV || 'development');
+console.log('📍 Render detected:', process.env.RENDER ? 'yes' : 'no');
 
-let DB_PATH = DB_PATHS.find(p => fs.existsSync(p));
+// For Render: Check if persistent disk is mounted
+const RENDER_DISK_PATH = '/data';
+const isOnRender = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
 
-// If no database exists, try to copy from seed or create new
-if (!DB_PATH) {
-    // Determine target location
-    if (fs.existsSync('/data')) {
-        DB_PATH = '/data/tweets.db';
-    } else {
-        DB_PATH = DB_PATHS[1]; // Root level
-    }
-
-    // Copy seed database if available
-    if (fs.existsSync(SEED_DB_PATH)) {
-        console.log('📦 Copying seed database to', DB_PATH);
-        fs.copyFileSync(SEED_DB_PATH, DB_PATH);
-        console.log('✅ Database ready with pre-loaded data!');
-    } else {
-        console.log('📝 No database found. A new one will be created when you import tweets.');
+// Log disk status for debugging
+if (isOnRender) {
+    console.log('🔍 Checking persistent disk at /data...');
+    console.log('   /data exists:', fs.existsSync(RENDER_DISK_PATH));
+    if (fs.existsSync(RENDER_DISK_PATH)) {
+        try {
+            const files = fs.readdirSync(RENDER_DISK_PATH);
+            console.log('   /data contents:', files.length > 0 ? files : '(empty)');
+        } catch (e) {
+            console.log('   /data read error:', e.message);
+        }
     }
 }
 
+// Database location priority:
+// 1. If /data exists (Render persistent disk) - USE IT
+// 2. Otherwise local development paths
+let DB_PATH;
+const SEED_DB_PATH = path.join(__dirname, 'data_tweets.db');
+
+if (fs.existsSync(RENDER_DISK_PATH)) {
+    // Render persistent disk is available - always use it
+    DB_PATH = path.join(RENDER_DISK_PATH, 'tweets.db');
+    console.log('✅ Using Render persistent disk:', DB_PATH);
+
+    // If database doesn't exist on disk, initialize it
+    if (!fs.existsSync(DB_PATH)) {
+        console.log('📦 No database on persistent disk, initializing...');
+        if (fs.existsSync(SEED_DB_PATH)) {
+            console.log('   Copying seed database...');
+            fs.copyFileSync(SEED_DB_PATH, DB_PATH);
+            console.log('   ✅ Seed database copied to persistent disk!');
+        } else {
+            console.log('   No seed database found, will create fresh.');
+        }
+    } else {
+        console.log('   Database already exists on disk, using existing data.');
+    }
+} else {
+    // Local development - use project directory
+    const localPaths = [
+        path.join(__dirname, 'tweets.db'),
+        path.join(__dirname, 'database/tweets.db')
+    ];
+
+    DB_PATH = localPaths.find(p => fs.existsSync(p));
+
+    if (!DB_PATH) {
+        DB_PATH = localPaths[0];
+        if (fs.existsSync(SEED_DB_PATH)) {
+            console.log('📦 Copying seed database to', DB_PATH);
+            fs.copyFileSync(SEED_DB_PATH, DB_PATH);
+        }
+    }
+    console.log('📂 Using local database:', DB_PATH);
+}
+
+console.log('🔗 Final database path:', DB_PATH);
+
 const db = new Database(DB_PATH, { readonly: false });
 db.pragma('journal_mode = WAL');
+console.log('✅ Database connection established');
 
 // Run schema to add any new columns/tables
 const SCHEMA_PATH = path.join(__dirname, 'database/schema.sql');
