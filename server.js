@@ -1013,6 +1013,30 @@ app.post('/api/admin/clear-use-tags', (req, res) => {
     }
 });
 
+// Run heuristic auto-tagging (FREE - no AI cost, just keyword matching)
+app.post('/api/admin/run-auto-tag', (req, res) => {
+    try {
+        const { execSync } = require('child_process');
+        const autoTagScript = path.join(__dirname, 'scripts/auto_tag_heuristics.js');
+
+        console.log('🏷️ Running heuristic auto-tagging...');
+        const output = execSync(`node "${autoTagScript}"`, {
+            encoding: 'utf8',
+            timeout: 120000 // 2 minute timeout
+        });
+        console.log('✅ Auto-tagging complete');
+
+        res.json({
+            success: true,
+            message: 'Auto-tagging complete',
+            output: output
+        });
+    } catch (err) {
+        console.error('Auto-tag error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============================================
 // Archive Upload
 // ============================================
