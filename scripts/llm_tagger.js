@@ -7,7 +7,11 @@ const Database = require('better-sqlite3');
 const path = require('path');
 
 // Configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyC2NLnvgqK9Hp7PbsSHDp9978b1_hIwDf4';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+    console.error('❌ Please set GEMINI_API_KEY environment variable');
+    process.exit(1);
+}
 const BATCH_SIZE = 20; // Tweets per API call
 const DELAY_MS = 2000; // Delay between batches to avoid rate limits
 
@@ -73,10 +77,7 @@ PATTERN TAGS (pick 0-2 that fit):
 - promotion: Selling something, self-promotion
 - announcement: Sharing news, launching something
 
-USE TAGS (pick 0-1 that fit):
-- book: Worthy of inclusion in a book of collected tweets
-- blog-post: Could be expanded into a full blog post
-- short-post: Good for quick social media repost
+NOTE: DO NOT assign any "use" tags - those are for manual assignment only.
 `;
 
 const SYSTEM_PROMPT = `You are a semantic tweet analyzer. Given a batch of tweets, analyze each one and assign relevant tags based on the actual MEANING and CONTEXT of the tweet, not just keyword matching.
@@ -93,12 +94,12 @@ IMPORTANT RULES:
 Respond in JSON format:
 {
   "results": [
-    {"id": "tweet_id", "topics": ["tag1", "tag2"], "patterns": ["tag1"], "use": "book"},
+    {"id": "tweet_id", "topics": ["tag1", "tag2"], "patterns": ["tag1"]},
     ...
   ]
 }
 
-Only include tags that genuinely fit. Use null for "use" if none apply.`;
+Only include tags that genuinely fit.`;
 
 // ==========================================
 // Gemini API Call
@@ -215,10 +216,7 @@ async function processAllTweets() {
                         ensureTagsExist(item.patterns, 'pattern');
                         applyTags(item.id, item.patterns, 'pattern');
                     }
-                    if (item.use) {
-                        ensureTagsExist([item.use], 'use');
-                        applyTags(item.id, [item.use], 'use');
-                    }
+                    // USE TAGS REMOVED - now manual-only
                     processed++;
                 }
             })();

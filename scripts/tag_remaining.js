@@ -26,8 +26,7 @@ art, aesthetics, romance, friendship, religion, spirituality, nyc, psychospiritu
 PATTERN TAGS (pick 0-2 that fit):
 hot-take, theory, observation, question, advice, story, joke, rant, insight, thread, list, framework, definition, prediction, engagement-bait, dated-reference, promotion, announcement
 
-USE TAGS (pick 0-1):
-book (worthy of a book), blog-post (could expand to blog), short-post (good for reposting)
+NOTE: DO NOT assign any "use" tags - those are for manual assignment only.
 
 RULES:
 1. Analyze the FULL meaning, not keywords (e.g., "beautiful art" is NOT romance)
@@ -35,7 +34,7 @@ RULES:
 3. Consider intent and main message
 
 Respond ONLY with valid JSON array:
-[{"id":"tweet_id","topics":["tag1"],"patterns":["tag1"],"use":"book"},...]`;
+[{"id":"tweet_id","topics":["tag1"],"patterns":["tag1"]},...]`;
 
 async function callOpenAI(tweets, retries = 0) {
     const tweetText = tweets.map(t => `[${t.id}] ${t.full_text.substring(0, 500)}`).join('\n---\n');
@@ -159,10 +158,7 @@ async function processUntaggedTweets() {
                         ensureTagsExist(item.patterns, 'pattern');
                         applyTags(item.id, item.patterns, 'pattern');
                     }
-                    if (item.use) {
-                        ensureTagsExist([item.use], 'use');
-                        applyTags(item.id, [item.use], 'use');
-                    }
+                    // USE TAGS REMOVED - now manual-only
                     processed++;
                 }
             })();
