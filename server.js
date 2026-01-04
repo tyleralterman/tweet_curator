@@ -93,10 +93,8 @@ app.get('/api/tweets', (req, res) => {
         const conditions = [];
         const params = [];
 
-        // Always hide subsequent tweets in self-threads (2nd, 3rd, etc. tweets in a thread)
-        // These are tweets where in_reply_to_tweet_id is set AND it's a self-reply (part of thread)
-        // They'll still show when viewing individual tweet's thread section
-        conditions.push(`(t.in_reply_to_tweet_id IS NULL OR t.tweet_type NOT IN ('thread'))`);
+        // Note: Thread visibility is controlled by the excludeThreads checkbox
+        // When unchecked, all threads show. When checked, thread-type tweets are hidden.
 
 
         if (search) {
