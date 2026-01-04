@@ -257,10 +257,10 @@ app.get('/api/tweets', (req, res) => {
         const conditions = [];
         const params = [];
 
-        // Hide subsequent tweets in threads (tweets whose parent is also a thread)
-        // Thread-starters have a parent that is NOT a thread type
+        // Hide subsequent tweets in threads (tweets whose in_reply_to parent EXISTS in our database)
+        // Thread-starters have NO parent in our database (their parent is external or deleted)
         // Requires LEFT JOIN tweets thread_parent ON t.in_reply_to_tweet_id = thread_parent.id
-        conditions.push(`(t.tweet_type != 'thread' OR thread_parent.tweet_type IS NULL OR thread_parent.tweet_type != 'thread')`);
+        conditions.push(`(t.tweet_type != 'thread' OR thread_parent.id IS NULL)`);
 
 
 
