@@ -805,6 +805,30 @@ app.get('/api/swipe/today', (req, res) => {
     }
 });
 
+// Clear all use tag assignments (one-time cleanup endpoint)
+app.post('/api/admin/clear-use-tags', (req, res) => {
+    try {
+        const beforeCount = db.prepare(`
+            SELECT COUNT(*) as count FROM tweet_tags 
+            WHERE tag_id IN (SELECT id FROM tags WHERE category = 'use')
+        `).get();
+
+        const result = db.prepare(`
+            DELETE FROM tweet_tags 
+            WHERE tag_id IN (SELECT id FROM tags WHERE category = 'use')
+        `).run();
+
+        res.json({
+            success: true,
+            message: `Removed ${result.changes} use tag assignments`,
+            beforeCount: beforeCount.count,
+            removed: result.changes
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============================================
 // Archive Upload
 // ============================================
