@@ -233,8 +233,8 @@ const PATTERNS = {
     'Prediction': [/i predict/i, /prediction:/i, /my prediction/i, /will happen/i, /gonna happen/i, /in \d+ years/i, /by 2\d{3}/i, /mark my words/i, /calling it now/i]
 };
 
-// New "Use" Tag Category
-const USE_TAGS = ['book', 'blog-post', 'short-post'];
+
+// NOTE: Use tags (book, blog-post, short-post) are MANUAL ONLY - not auto-created
 
 // ==========================================
 // Helpers
@@ -299,8 +299,7 @@ function run() {
     Object.keys(DEFINITIONS).forEach(t => insertTag.run(t.toLowerCase(), 'topic'));
     // Ensure tags exist (Patterns)
     Object.keys(PATTERNS).forEach(p => insertTag.run(p.toLowerCase(), 'pattern'));
-    // Ensure tags exist (Use)
-    USE_TAGS.forEach(u => insertTag.run(u, 'use'));
+    // USE TAGS REMOVED - now manual-only
 
     let countTags = 0;
 
@@ -332,8 +331,7 @@ function run() {
     })();
 
     console.log(`✅ Done!`);
-    console.log(`Added ${countTags} new semantic/pattern tags.`);
-    console.log(`'Use' tags (book, blog-post, short-post) added to DB.`);
+    console.log(`Added ${countTags} semantic/pattern tags.`);
 }
 
 run();

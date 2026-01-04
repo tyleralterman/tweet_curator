@@ -232,9 +232,10 @@ async function importTweets() {
     // Build ID map for thread detection
     const tweetIdMap = buildTweetIdMap(tweetsData);
 
-    // Prepare insert statement with new fields
+    // Use INSERT OR IGNORE to preserve user data (swipe_status, quality_rating, notes)
+    // for existing tweets. Only NEW tweets will be imported.
     const insertTweet = db.prepare(`
-        INSERT OR REPLACE INTO tweets (
+        INSERT OR IGNORE INTO tweets (
             id, full_text, created_at, favorite_count, retweet_count,
             is_reply, is_quote_tweet, is_retweet, is_thread, has_media, 
             media_type, media_url, lang, source, 
