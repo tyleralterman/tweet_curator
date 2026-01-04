@@ -276,9 +276,16 @@ app.get('/api/tweets', (req, res) => {
             }
         }
 
+
         if (type) {
-            conditions.push(`t.tweet_type = ?`);
-            params.push(type);
+            if (type === 'thread') {
+                // Special handling: show tweets that START threads
+                // (tweets that have at least one child reply in our database)
+                conditions.push(`EXISTS (SELECT 1 FROM tweets child WHERE child.in_reply_to_tweet_id = t.id)`);
+            } else {
+                conditions.push(`t.tweet_type = ?`);
+                params.push(type);
+            }
         }
 
         if (length) {
