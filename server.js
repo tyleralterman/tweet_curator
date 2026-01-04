@@ -93,8 +93,10 @@ app.get('/api/tweets', (req, res) => {
         const conditions = [];
         const params = [];
 
-        // Note: Thread visibility is controlled by the excludeThreads checkbox
-        // When unchecked, all threads show. When checked, thread-type tweets are hidden.
+        // Hide subsequent tweets in threads (tweets whose parent is also a thread)
+        // Thread-starters have a parent that is NOT a thread type
+        // Requires LEFT JOIN tweets thread_parent ON t.in_reply_to_tweet_id = thread_parent.id
+        conditions.push(`(t.tweet_type != 'thread' OR thread_parent.tweet_type IS NULL OR thread_parent.tweet_type != 'thread')`);
 
 
         if (search) {
@@ -169,17 +171,20 @@ app.get('/api/tweets', (req, res) => {
         const sortColumn = validSorts.includes(sort) ? sort : 'created_at';
         const sqlSortOrder = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-        // Count query needs to handle HAVING for multi-tag
+        // Count query needs to handle HAVING for multi-tag AND thread_parent join
+        const threadParentJoin = 'LEFT JOIN tweets thread_parent ON t.in_reply_to_tweet_id = thread_parent.id';
         let countQuery;
         if (havingClause) {
             countQuery = `SELECT COUNT(*) as total FROM (
-                SELECT t.id FROM tweets t ${joinClause} ${whereClause} GROUP BY t.id ${havingClause}
+                SELECT t.id FROM tweets t ${threadParentJoin} ${joinClause} ${whereClause} GROUP BY t.id ${havingClause}
             )`;
         } else {
-            countQuery = `SELECT COUNT(DISTINCT t.id) as total FROM tweets t ${joinClause} ${whereClause}`;
+            countQuery = `SELECT COUNT(DISTINCT t.id) as total FROM tweets t ${threadParentJoin} ${joinClause} ${whereClause}`;
         }
         const { total } = db.prepare(countQuery).get(...params);
 
+        // We join thread_parent to identify subsequent thread tweets
+        // A subsequent thread tweet has a parent that is also a thread
         const tweetsQuery = `
             SELECT 
                 t.*,
@@ -187,9 +192,11 @@ app.get('/api/tweets', (req, res) => {
                 GROUP_CONCAT(DISTINCT tags.category || ':' || tags.name || ':' || COALESCE(tags.color, '#666')) as tag_details,
                 quoted.full_text as quoted_text,
                 quoted.media_url as quoted_media,
-                quoted.id as quoted_id
+                quoted.id as quoted_id,
+                thread_parent.tweet_type as parent_tweet_type
             FROM tweets t
             LEFT JOIN tweets quoted ON t.quoted_tweet_id = quoted.id
+            LEFT JOIN tweets thread_parent ON t.in_reply_to_tweet_id = thread_parent.id
             ${joinClause}
             LEFT JOIN tweet_tags tt ON t.id = tt.tweet_id
             LEFT JOIN tags ON tags.id = tt.tag_id
