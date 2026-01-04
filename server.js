@@ -1037,6 +1037,49 @@ app.post('/api/admin/run-auto-tag', (req, res) => {
     }
 });
 
+// Get current database info
+app.get('/api/admin/db-info', (req, res) => {
+    try {
+        const stats = db.prepare('SELECT COUNT(*) as count FROM tweets').get();
+        res.json({
+            currentPath: DB_PATH,
+            persistentDiskExists: fs.existsSync('/data'),
+            tweetCount: stats.count
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Migrate database to persistent disk
+app.post('/api/admin/migrate-to-persistent', (req, res) => {
+    try {
+        if (!fs.existsSync('/data')) {
+            return res.json({ success: false, message: 'No /data directory - persistent disk not mounted' });
+        }
+
+        if (DB_PATH === '/data/tweets.db') {
+            return res.json({ success: true, message: 'Already using persistent disk', path: DB_PATH });
+        }
+
+        const targetPath = '/data/tweets.db';
+        console.log(`📦 Migrating database from ${DB_PATH} to ${targetPath}...`);
+
+        // Close current connection, copy file, and restart will use new location
+        db.close();
+        fs.copyFileSync(DB_PATH, targetPath);
+
+        res.json({
+            success: true,
+            message: `Database copied to ${targetPath}. Restart server for change to take effect.`,
+            from: DB_PATH,
+            to: targetPath
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============================================
 // Archive Upload
 // ============================================
