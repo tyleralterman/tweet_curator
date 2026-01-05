@@ -1078,6 +1078,78 @@ app.post('/api/admin/run-auto-tag', (req, res) => {
     }
 });
 
+// Run LLM-based semantic tagging (costs API $, but much more accurate)
+// This is a long-running operation so it runs in the background
+let llmTaggingStatus = { running: false, progress: '', startTime: null };
+
+app.post('/api/admin/run-llm-tag', (req, res) => {
+    if (llmTaggingStatus.running) {
+        return res.json({
+            success: false,
+            message: 'LLM tagging already in progress',
+            status: llmTaggingStatus
+        });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        return res.status(400).json({
+            success: false,
+            error: 'OPENAI_API_KEY not set. Add it in Render environment variables.'
+        });
+    }
+
+    // Start LLM tagging in background
+    llmTaggingStatus = { running: true, progress: 'Starting...', startTime: Date.now() };
+
+    const { spawn } = require('child_process');
+    const llmScript = path.join(__dirname, 'scripts/llm_tagger_openai.js');
+
+    console.log('🤖 Starting LLM-based semantic tagging (background)...');
+
+    const child = spawn('node', [llmScript], {
+        env: { ...process.env, OPENAI_API_KEY: apiKey },
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    child.stdout.on('data', (data) => {
+        const msg = data.toString().trim();
+        console.log('[LLM-TAG]', msg);
+        llmTaggingStatus.progress = msg;
+    });
+
+    child.stderr.on('data', (data) => {
+        console.error('[LLM-TAG ERROR]', data.toString());
+    });
+
+    child.on('close', (code) => {
+        const elapsed = ((Date.now() - llmTaggingStatus.startTime) / 1000 / 60).toFixed(1);
+        llmTaggingStatus.running = false;
+        llmTaggingStatus.progress = code === 0
+            ? `✅ Completed in ${elapsed} minutes`
+            : `❌ Failed with code ${code}`;
+        console.log(`🤖 LLM tagging finished: ${llmTaggingStatus.progress}`);
+    });
+
+    res.json({
+        success: true,
+        message: 'LLM tagging started in background. Check /api/admin/llm-tag-status for progress.',
+        estimatedTime: 'About 60-90 minutes for 35k tweets'
+    });
+});
+
+// Check LLM tagging progress
+app.get('/api/admin/llm-tag-status', (req, res) => {
+    const elapsed = llmTaggingStatus.startTime
+        ? ((Date.now() - llmTaggingStatus.startTime) / 1000 / 60).toFixed(1)
+        : 0;
+
+    res.json({
+        ...llmTaggingStatus,
+        elapsedMinutes: elapsed
+    });
+});
+
 // Get current database info
 app.get('/api/admin/db-info', (req, res) => {
     try {

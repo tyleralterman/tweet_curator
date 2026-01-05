@@ -18,8 +18,21 @@ const BATCH_SIZE = 25; // Tweets per API call
 const DELAY_MS = 500; // Delay between batches
 const MAX_RETRIES = 3;
 
-// Database
-const DB_PATH = path.join(__dirname, '../tweets.db');
+const fs = require('fs');
+
+// Database - check multiple locations (same as server.js)
+const DB_PATHS = [
+    '/data/tweets.db',                            // Render persistent disk
+    path.join(__dirname, '../tweets.db'),         // Root level
+    path.join(__dirname, '../database/tweets.db') // Subdirectory (local dev)
+];
+
+const DB_PATH = DB_PATHS.find(p => fs.existsSync(p));
+if (!DB_PATH) {
+    console.error('❌ No database found at:', DB_PATHS);
+    process.exit(1);
+}
+console.log('📂 Using database:', DB_PATH);
 const db = new Database(DB_PATH);
 
 // Tag definitions for the LLM
@@ -134,9 +147,10 @@ function applyTags(tweetId, tags, category) {
 async function processAllTweets() {
     console.log('🤖 Starting OpenAI-based semantic tagging...\n');
 
-    // Clear old AI tags
-    console.log('🧹 Clearing previous AI tags...');
-    db.prepare("DELETE FROM tweet_tags WHERE source = 'ai'").run();
+    // Clear ALL existing tags (ai, auto, and manual) - fresh start
+    console.log('🧹 Clearing ALL existing tweet tags...');
+    const deleted = db.prepare("DELETE FROM tweet_tags").run();
+    console.log(`   Deleted ${deleted.changes} tag assignments.`);
 
     // Get all tweets (excluding retweets and replies for cleaner data)
     const tweets = db.prepare(`
