@@ -144,11 +144,37 @@ async function updateTweet(tweetId, updates) {
 
 async function addTag(tweetId, tagName, category = 'custom') {
     try {
-        await fetch(`/api/tweets/${tweetId}/tags`, {
+        const response = await fetch(`/api/tweets/${tweetId}/tags`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tagName, tagCategory: category })
         });
+
+        if (!response.ok) {
+            const err = await response.json();
+            console.error('Error adding tag:', err);
+            return false;
+        }
+
+        // Update local state for the tweet so UI reflects change immediately
+        const tweet = state.tweets.find(t => t.id === tweetId);
+        if (tweet) {
+            if (!tweet.tags) tweet.tags = [];
+            // Avoid duplicates
+            if (!tweet.tags.some(t => t.name === tagName.toLowerCase())) {
+                tweet.tags.push({ name: tagName.toLowerCase(), category, color: '#30363d' });
+            }
+        }
+
+        // Also update selectedTweet if open
+        if (state.selectedTweet && state.selectedTweet.id === tweetId) {
+            if (!state.selectedTweet.tags) state.selectedTweet.tags = [];
+            if (!state.selectedTweet.tags.some(t => t.name === tagName.toLowerCase())) {
+                state.selectedTweet.tags.push({ name: tagName.toLowerCase(), category, color: '#30363d' });
+            }
+        }
+
+        // Refresh tags sidebar (async, don't wait)
         fetchTags();
         return true;
     } catch (err) {
@@ -159,9 +185,26 @@ async function addTag(tweetId, tagName, category = 'custom') {
 
 async function removeTag(tweetId, tagName) {
     try {
-        await fetch(`/api/tweets/${tweetId}/tags/${tagName}`, {
+        const response = await fetch(`/api/tweets/${tweetId}/tags/${tagName}`, {
             method: 'DELETE'
         });
+
+        if (!response.ok) {
+            console.error('Error removing tag');
+            return false;
+        }
+
+        // Update local state for the tweet
+        const tweet = state.tweets.find(t => t.id === tweetId);
+        if (tweet && tweet.tags) {
+            tweet.tags = tweet.tags.filter(t => t.name !== tagName.toLowerCase());
+        }
+
+        // Also update selectedTweet if open
+        if (state.selectedTweet && state.selectedTweet.id === tweetId && state.selectedTweet.tags) {
+            state.selectedTweet.tags = state.selectedTweet.tags.filter(t => t.name !== tagName.toLowerCase());
+        }
+
         fetchTags();
         return true;
     } catch (err) {
@@ -764,6 +807,8 @@ async function openTweetModal(tweetId) {
 
 function closeModal() {
     elements.modal.classList.remove('active');
+    // Re-render tweets to show any tag changes made in modal
+    renderTweets();
     state.selectedTweet = null;
 }
 
