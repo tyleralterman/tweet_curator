@@ -176,6 +176,11 @@ body::before {
     color: var(--sage);
 }
 
+.stat.stat-today .stat-value {
+    color: #5dade2;
+    /* Bright cyan/blue for visibility */
+}
+
 /* Filter Section */
 .filter-section {
     margin-bottom: 16px;

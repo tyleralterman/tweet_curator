@@ -58,7 +58,8 @@ const elements = {
     totalTweets: document.getElementById('totalTweets'),
     superlikedCount: document.getElementById('superlikedCount'),
     likedCount: document.getElementById('likedCount'),
-    reviewedCount: document.getElementById('reviewedCount')
+    reviewedCount: document.getElementById('reviewedCount'),
+    todayCount: document.getElementById('todayCount')
 };
 
 // ============================================
@@ -121,6 +122,7 @@ async function fetchStats() {
         const response = await fetch('/api/stats');
         const data = await response.json();
         state.stats = data.stats;
+        state.todayStats = data.todayStats || { tweets_swiped: 0 };
         updateStatsUI();
     } catch (err) {
         console.error('Error fetching stats:', err);
@@ -464,6 +466,11 @@ function updateStatsUI() {
     elements.superlikedCount.textContent = formatNumber(s.superliked || 0);
     elements.likedCount.textContent = formatNumber(s.liked || 0);
     elements.reviewedCount.textContent = formatNumber(s.reviewed || 0);
+
+    // Today's swipe count
+    if (elements.todayCount && state.todayStats) {
+        elements.todayCount.textContent = formatNumber(state.todayStats.tweets_swiped || 0);
+    }
 }
 
 function updatePaginationUI() {
