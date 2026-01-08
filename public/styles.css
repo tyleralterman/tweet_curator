@@ -1300,3 +1300,43 @@ body::before {
 .text-link:hover {
     text-decoration: underline;
 }
+
+/* Notes and First Impressions Text Areas */
+.notes-textarea {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 80px;
+    margin-bottom: 8px;
+}
+
+.notes-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.notes-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.save-notes-btn {
+    padding: 8px 16px;
+    background: var(--forest);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--cream);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.save-notes-btn:hover {
+    background: var(--sage);
+}

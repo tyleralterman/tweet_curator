@@ -102,6 +102,18 @@ try {
     // Schema already applied
 }
 
+// Auto-migration: Add first_impressions column if it doesn't exist
+try {
+    const columns = db.pragma('table_info(tweets)').map(c => c.name);
+    if (!columns.includes('first_impressions')) {
+        console.log('🔄 Adding first_impressions column to tweets table...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN first_impressions TEXT').run();
+        console.log('✅ first_impressions column added');
+    }
+} catch (e) {
+    console.log('Note: first_impressions migration:', e.message);
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -528,7 +540,7 @@ app.get('/api/tweets/:id/thread', (req, res) => {
 // Update tweet
 app.patch('/api/tweets/:id', (req, res) => {
     try {
-        const { quality_rating, swipe_status, notes, is_reviewed } = req.body;
+        const { quality_rating, swipe_status, notes, first_impressions, is_reviewed } = req.body;
         const updates = [];
         const params = [];
 
@@ -561,6 +573,10 @@ app.patch('/api/tweets/:id', (req, res) => {
         if (notes !== undefined) {
             updates.push('notes = ?');
             params.push(notes);
+        }
+        if (first_impressions !== undefined) {
+            updates.push('first_impressions = ?');
+            params.push(first_impressions);
         }
         if (is_reviewed !== undefined) {
             updates.push('is_reviewed = ?');

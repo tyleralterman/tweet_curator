@@ -604,6 +604,22 @@ async function openTweetModal(tweetId) {
         </div>
         
         <div class="modal-section">
+            <h4>First Impressions</h4>
+            <textarea id="firstImpressionsInput" class="notes-textarea" 
+                      placeholder="Write your initial thoughts about this tweet..."
+                      rows="3">${tweet.first_impressions || ''}</textarea>
+            <button id="saveFirstImpressions" class="save-notes-btn">Save</button>
+        </div>
+        
+        <div class="modal-section">
+            <h4>Notes</h4>
+            <textarea id="notesInput" class="notes-textarea" 
+                      placeholder="Add detailed notes, ideas for use, etc..."
+                      rows="4">${tweet.notes || ''}</textarea>
+            <button id="saveNotes" class="save-notes-btn">Save</button>
+        </div>
+        
+        <div class="modal-section">
             <h4>Tags</h4>
             <div class="modal-tags" id="modalTags">
                 ${(tweet.tags || []).map(tag => `
@@ -706,6 +722,28 @@ async function openTweetModal(tweetId) {
             document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         });
+    });
+
+    // Save First Impressions
+    document.getElementById('saveFirstImpressions').addEventListener('click', async () => {
+        const value = document.getElementById('firstImpressionsInput').value;
+        await updateTweet(tweet.id, { first_impressions: value });
+        // Update local state
+        if (state.selectedTweet) state.selectedTweet.first_impressions = value;
+        const btn = document.getElementById('saveFirstImpressions');
+        btn.textContent = 'Saved!';
+        setTimeout(() => btn.textContent = 'Save', 1500);
+    });
+
+    // Save Notes
+    document.getElementById('saveNotes').addEventListener('click', async () => {
+        const value = document.getElementById('notesInput').value;
+        await updateTweet(tweet.id, { notes: value });
+        // Update local state
+        if (state.selectedTweet) state.selectedTweet.notes = value;
+        const btn = document.getElementById('saveNotes');
+        btn.textContent = 'Saved!';
+        setTimeout(() => btn.textContent = 'Save', 1500);
     });
 
     document.querySelectorAll('.remove-tag').forEach(btn => {

@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS tweets (
     swipe_status TEXT CHECK(swipe_status IN ('dislike', 'like', 'superlike', 'review_later')),
     is_reviewed BOOLEAN DEFAULT FALSE,
     reviewed_at DATETIME,
-    notes TEXT
+    notes TEXT,
+    first_impressions TEXT
 );
 
 -- Tags table
