@@ -1345,3 +1345,19 @@ body::before {
 .save-notes-btn:hover {
     background: var(--sage);
 }
+
+/* Custom Tags */
+.tag-btn.custom {
+    border-color: #8e44ad;
+}
+
+.tag-btn.custom.active {
+    background: rgba(142, 68, 173, 0.3);
+    border-color: #8e44ad;
+}
+
+.no-tags {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+}

@@ -48,6 +48,7 @@ const elements = {
     topicTags: document.getElementById('topicTags'),
     patternTags: document.getElementById('patternTags'),
     useTags: document.getElementById('useTags'),
+    customTags: document.getElementById('customTags'),
     modal: document.getElementById('tweetModal'),
     modalBody: document.getElementById('modalBody'),
     modalClose: document.querySelector('.modal-close'),
@@ -439,6 +440,19 @@ function renderTags() {
                 ${tag.name} <span class="count">${tag.tweet_count}</span>
             </button>
         `).join('');
+    }
+
+    // Custom tags
+    if (elements.customTags && state.tags.custom && state.tags.custom.length > 0) {
+        elements.customTags.innerHTML = state.tags.custom.map(tag => `
+            <button class="tag-btn custom ${isSelected(tag.name) ? 'active' : ''}" 
+                    data-tag="${tag.name}"
+                    style="border-color: ${tag.color || '#8e44ad'}">
+                ${tag.name} <span class="count">${tag.tweet_count}</span>
+            </button>
+        `).join('');
+    } else if (elements.customTags) {
+        elements.customTags.innerHTML = '<span class="no-tags">No custom tags yet</span>';
     }
 
     // Add click handlers - toggle tags in/out of array
