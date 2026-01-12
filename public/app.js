@@ -767,14 +767,16 @@ async function openTweetModal(tweetId) {
         setTimeout(() => btn.textContent = 'Save', 1500);
     });
 
-    document.querySelectorAll('.remove-tag').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+    // Use event delegation for remove-tag buttons (handles dynamically added tags)
+    const modalTagsContainer = document.getElementById('modalTags');
+    modalTagsContainer.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('remove-tag')) {
             e.stopPropagation();
-            const tagName = btn.dataset.tag;
+            const tagName = e.target.dataset.tag;
             if (await removeTag(tweet.id, tagName)) {
-                btn.parentElement.remove();
+                e.target.parentElement.remove();
             }
-        });
+        }
     });
 
     // Tag autocomplete
