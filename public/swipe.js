@@ -8,7 +8,8 @@ const state = {
     history: [],
     loading: false,
     stats: { total: 0, remaining: 0, today: 0 },
-    currentCard: null
+    currentCard: null,
+    seenIds: new Set() // Track all tweet IDs we've shown to prevent duplicates
 };
 
 // DOM Elements
@@ -75,8 +76,12 @@ async function loadMoreTweets() {
         const data = await response.json();
 
         if (data.tweets && data.tweets.length > 0) {
-            // Filter duplicates if any remain (though we cleared queue)
-            const newTweets = data.tweets; // .filter(t => !state.queue.find(q => q.id === t.id));
+            // Filter out tweets we've already seen in this session
+            const newTweets = data.tweets.filter(t => !state.seenIds.has(t.id));
+
+            // Mark these as seen
+            newTweets.forEach(t => state.seenIds.add(t.id));
+
             state.queue.push(...newTweets);
             renderCards();
         } else if (state.queue.length === 0) {
