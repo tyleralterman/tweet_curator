@@ -1472,9 +1472,17 @@ Available columns:
 
 Available tags (can filter via JOIN with tweet_tags): ${tagList}
 
+CRITICAL - SEMANTIC EXPANSION:
+For ANY topic query, you MUST expand it with 5-10 semantically related keywords and synonyms. Think broadly about:
+- Synonyms and near-synonyms
+- Related concepts and sub-topics
+- Common alternative phrasings
+- Technical and colloquial terms
+This ensures we find ALL relevant tweets, not just exact keyword matches.
+
 RULES:
 1. Return ONLY a JSON object with: {"where": "SQL WHERE clause", "orderBy": "optional ORDER BY", "tagFilter": "optional tag name"}
-2. For SPECIFIC TOPIC queries (e.g. "effective altruism", "bitcoin", "meditation"), ALWAYS use full_text LIKE patterns, not tagFilter
+2. For SPECIFIC TOPIC queries, ALWAYS use full_text LIKE patterns with MULTIPLE related keywords using OR
 3. Only use tagFilter if the query mentions a GENERAL category that matches an available tag name exactly
 4. For emotional/sentiment queries, use LIKE patterns on full_text with multiple keywords
 5. For engagement queries, use favorite_count or retweet_count
@@ -1482,9 +1490,10 @@ RULES:
 7. Use lower() for case-insensitive matching
 
 Examples:
-- "tweets about effective altruism" -> {"where": "lower(full_text) LIKE '%effective altruism%' OR lower(full_text) LIKE '%ea community%' OR lower(full_text) LIKE '%longtermism%'", "orderBy": "favorite_count DESC"}
-- "tweets where I seem excited" -> {"where": "full_text LIKE '%!%' AND (lower(full_text) LIKE '%amazing%' OR lower(full_text) LIKE '%love%' OR lower(full_text) LIKE '%excited%')", "orderBy": "favorite_count DESC"}
-- "spiritual tweets about Trump" -> {"where": "lower(full_text) LIKE '%trump%' AND lower(full_text) LIKE '%spirit%'", "orderBy": "favorite_count DESC"}
+- "telepathy" -> {"where": "lower(full_text) LIKE '%telepathy%' OR lower(full_text) LIKE '%psychic%' OR lower(full_text) LIKE '%mind reading%' OR lower(full_text) LIKE '%mental communication%' OR lower(full_text) LIKE '%esp%' OR lower(full_text) LIKE '%extrasensory%' OR lower(full_text) LIKE '%telekinesis%' OR lower(full_text) LIKE '%clairvoyant%'", "orderBy": "favorite_count DESC"}
+- "meditation" -> {"where": "lower(full_text) LIKE '%meditation%' OR lower(full_text) LIKE '%meditat%' OR lower(full_text) LIKE '%mindfulness%' OR lower(full_text) LIKE '%contemplat%' OR lower(full_text) LIKE '%breathing exercise%' OR lower(full_text) LIKE '%zen%' OR lower(full_text) LIKE '%vipassana%' OR lower(full_text) LIKE '%sitting practice%'", "orderBy": "favorite_count DESC"}
+- "AI danger" -> {"where": "lower(full_text) LIKE '%ai risk%' OR lower(full_text) LIKE '%ai danger%' OR lower(full_text) LIKE '%artificial intelligence%' AND lower(full_text) LIKE '%danger%' OR lower(full_text) LIKE '%existential risk%' OR lower(full_text) LIKE '%agi%' OR lower(full_text) LIKE '%superintelligence%' OR lower(full_text) LIKE '%alignment problem%' OR lower(full_text) LIKE '%ai safety%'", "orderBy": "favorite_count DESC"}
+- "tweets where I seem excited" -> {"where": "full_text LIKE '%!%' AND (lower(full_text) LIKE '%amazing%' OR lower(full_text) LIKE '%love%' OR lower(full_text) LIKE '%excited%' OR lower(full_text) LIKE '%incredible%' OR lower(full_text) LIKE '%wow%' OR lower(full_text) LIKE '%awesome%')", "orderBy": "favorite_count DESC"}
 - "my most popular philosophy tweets" -> {"tagFilter": "philosophy", "orderBy": "favorite_count DESC"}`;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
