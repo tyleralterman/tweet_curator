@@ -230,6 +230,11 @@ body::before {
     background: var(--bg-tertiary);
 }
 
+.suggestion-item.highlighted {
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--amber);
+}
+
 .suggestion-name {
     color: var(--text-primary);
     font-size: 0.9rem;

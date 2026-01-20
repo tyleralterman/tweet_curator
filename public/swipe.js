@@ -191,45 +191,100 @@ async function removeTagFromCurrentTweet(tagName) {
     }
 }
 
+// Track selected suggestion index
+let selectedSuggestionIndex = -1;
+
 function setupTagInput() {
     if (!elements.quickTagInput) return;
 
     // Autocomplete as you type
     elements.quickTagInput.addEventListener('input', (e) => {
+        selectedSuggestionIndex = -1; // Reset selection when typing
         showAutocompleteSuggestions(e.target.value.trim());
     });
 
     elements.quickTagInput.addEventListener('keydown', (e) => {
         const suggestionsEl = document.getElementById('tagSuggestions');
+        const suggestions = suggestionsEl?.querySelectorAll('.suggestion-item') || [];
+        const hasSuggestions = suggestionsEl?.classList.contains('visible') && suggestions.length > 0;
 
-        // Arrow keys trigger swipe even when input is focused
-        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        // Down arrow - navigate suggestions
+        if (e.key === 'ArrowDown') {
             e.preventDefault();
-            switch (e.key) {
-                case 'ArrowRight': swipeCard('right'); break;
-                case 'ArrowLeft': swipeCard('left'); break;
-                case 'ArrowUp': swipeCard('up'); break;
-                case 'ArrowDown': swipeCard('down'); break;
+            if (hasSuggestions) {
+                selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+                updateSuggestionHighlight(suggestions);
             }
-            elements.quickTagInput.value = '';
-            if (suggestionsEl) suggestionsEl.classList.remove('visible');
             return;
         }
 
-        // Enter submits the tag
+        // Up arrow - navigate suggestions OR superlike if no suggestions
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (hasSuggestions && selectedSuggestionIndex > 0) {
+                selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, 0);
+                updateSuggestionHighlight(suggestions);
+            } else if (!hasSuggestions) {
+                swipeCard('up');
+                elements.quickTagInput.value = '';
+            }
+            return;
+        }
+
+        // Left/Right arrows trigger swipe
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            swipeCard('left');
+            elements.quickTagInput.value = '';
+            if (suggestionsEl) suggestionsEl.classList.remove('visible');
+            selectedSuggestionIndex = -1;
+            return;
+        }
+
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            swipeCard('right');
+            elements.quickTagInput.value = '';
+            if (suggestionsEl) suggestionsEl.classList.remove('visible');
+            selectedSuggestionIndex = -1;
+            return;
+        }
+
+        // Enter submits the highlighted suggestion or typed tag
         if (e.key === 'Enter') {
             e.preventDefault();
-            const tagName = elements.quickTagInput.value.trim().toLowerCase();
-            if (tagName) {
+
+            if (hasSuggestions && selectedSuggestionIndex >= 0 && suggestions[selectedSuggestionIndex]) {
+                const tagName = suggestions[selectedSuggestionIndex].dataset.tag;
                 addTagToCurrentTweet(tagName);
                 elements.quickTagInput.value = '';
-                if (suggestionsEl) suggestionsEl.classList.remove('visible');
+                suggestionsEl.classList.remove('visible');
+                selectedSuggestionIndex = -1;
+            } else {
+                const tagName = elements.quickTagInput.value.trim().toLowerCase();
+                if (tagName) {
+                    addTagToCurrentTweet(tagName);
+                    elements.quickTagInput.value = '';
+                    if (suggestionsEl) suggestionsEl.classList.remove('visible');
+                    selectedSuggestionIndex = -1;
+                }
             }
         }
 
         // Escape closes suggestions
         if (e.key === 'Escape') {
             if (suggestionsEl) suggestionsEl.classList.remove('visible');
+            selectedSuggestionIndex = -1;
+        }
+    });
+}
+
+function updateSuggestionHighlight(suggestions) {
+    suggestions.forEach((item, idx) => {
+        if (idx === selectedSuggestionIndex) {
+            item.classList.add('highlighted');
+        } else {
+            item.classList.remove('highlighted');
         }
     });
 }
