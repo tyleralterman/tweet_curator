@@ -131,8 +131,8 @@ try {
 
     const insertTag = db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)');
 
-    // "like" tag: < 281 chars AND > 99 likes
-    const likeTagId = ensureTag('like', 'use');
+    // "auto-like" tag: < 281 chars AND > 99 likes
+    const likeTagId = ensureTag('auto-like', 'use');
     const likeTweets = db.prepare(`
         SELECT t.id FROM tweets t
         WHERE LENGTH(t.full_text) < 281 AND t.favorite_count > 99
@@ -143,10 +143,10 @@ try {
     for (const t of likeTweets) {
         if (insertTag.run(t.id, likeTagId, 'ai').changes > 0) likeAdded++;
     }
-    if (likeAdded > 0) console.log(`✅ Added "like" tag to ${likeAdded} tweets`);
+    if (likeAdded > 0) console.log(`✅ Added "auto-like" tag to ${likeAdded} tweets`);
 
-    // "superlike" tag: > 550 chars AND > 59 likes
-    const superlikeTagId = ensureTag('superlike', 'use');
+    // "auto-superlike" tag: > 550 chars AND > 59 likes
+    const superlikeTagId = ensureTag('auto-superlike', 'use');
     const superlikeTweets = db.prepare(`
         SELECT t.id FROM tweets t
         WHERE LENGTH(t.full_text) > 550 AND t.favorite_count > 59
@@ -157,7 +157,7 @@ try {
     for (const t of superlikeTweets) {
         if (insertTag.run(t.id, superlikeTagId, 'ai').changes > 0) superlikeAdded++;
     }
-    if (superlikeAdded > 0) console.log(`✅ Added "superlike" tag to ${superlikeAdded} tweets`);
+    if (superlikeAdded > 0) console.log(`✅ Added "auto-superlike" tag to ${superlikeAdded} tweets`);
 
 } catch (e) {
     console.log('Note: auto-tagging:', e.message);
@@ -1010,7 +1010,9 @@ app.get('/api/swipe/queue', (req, res) => {
 
         const conditions = [
             "t.swipe_status IS NULL",
-            "t.tweet_type NOT IN ('retweet', 'reply', 'thread')"
+            "t.tweet_type NOT IN ('retweet', 'reply', 'thread')",
+            // Exclude auto-tagged tweets (already decided by algorithm)
+            "t.id NOT IN (SELECT tt.tweet_id FROM tweet_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tg.name IN ('auto-like', 'auto-superlike'))"
         ];
         const params = [];
 
