@@ -10,7 +10,15 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const extractZip = require('extract-zip');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
+
+// Optional: node-cron for Substack scheduling (only load if available)
+let cron;
+try {
+    cron = require('node-cron');
+} catch (e) {
+    console.log('📅 node-cron not available - Substack scheduling disabled');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1661,6 +1669,30 @@ app.listen(PORT, () => {
    
    Press Ctrl+C to stop
 `);
+
+    // Set up Substack posting cron jobs (only in production with valid config)
+    if (cron && process.env.RENDER && process.env.SUBSTACK_EMAIL) {
+        console.log('📅 Setting up Substack posting schedule...');
+
+        // Helper to run the poster
+        const runPoster = () => {
+            console.log('📫 Running Substack poster...');
+            const poster = spawn('node', [path.join(__dirname, 'scripts/substack_poster.js')], {
+                stdio: 'inherit',
+                env: process.env
+            });
+            poster.on('error', (err) => console.error('Poster error:', err));
+        };
+
+        // Schedule: 9:00 AM, 1:00 PM, 8:30 PM CST (UTC-6)
+        // Cron uses server time - Render is UTC, so CST offset needed
+        // CST 9:00 AM = UTC 15:00, CST 1:00 PM = UTC 19:00, CST 8:30 PM = UTC 2:30 (next day)
+        cron.schedule('0 15 * * *', runPoster); // 9 AM CST
+        cron.schedule('0 19 * * *', runPoster); // 1 PM CST
+        cron.schedule('30 2 * * *', runPoster); // 8:30 PM CST (next day UTC)
+
+        console.log('✅ Substack posting scheduled: 9AM, 1PM, 8:30PM CST');
+    }
 });
 
 process.on('SIGINT', () => {
