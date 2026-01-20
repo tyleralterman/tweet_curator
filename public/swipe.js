@@ -57,14 +57,24 @@ async function init() {
 // Tag Functions
 // ============================================
 
+// Store all tags for autocomplete
+let allTags = [];
+
 async function loadTopicTags() {
     try {
         const response = await fetch('/api/tags');
-        const tags = await response.json();
+        const grouped = await response.json();
 
-        // Filter to topic tags only and sort by count
-        const topicTags = tags
-            .filter(t => t.category === 'topic')
+        // Store all tags for autocomplete
+        allTags = [
+            ...(grouped.topic || []),
+            ...(grouped.pattern || []),
+            ...(grouped.use || []),
+            ...(grouped.custom || [])
+        ];
+
+        // Get topic tags sorted by count
+        const topicTags = (grouped.topic || [])
             .sort((a, b) => b.tweet_count - a.tweet_count)
             .slice(0, 30);
 
@@ -84,6 +94,44 @@ async function loadTopicTags() {
     } catch (err) {
         console.error('Error loading topic tags:', err);
     }
+}
+
+function showAutocompleteSuggestions(query) {
+    const suggestionsEl = document.getElementById('tagSuggestions');
+    if (!suggestionsEl) return;
+
+    if (!query || query.length < 1) {
+        suggestionsEl.classList.remove('visible');
+        return;
+    }
+
+    const matches = allTags
+        .filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
+        .sort((a, b) => b.tweet_count - a.tweet_count)
+        .slice(0, 8);
+
+    if (matches.length === 0) {
+        suggestionsEl.classList.remove('visible');
+        return;
+    }
+
+    suggestionsEl.innerHTML = matches.map(tag => `
+        <div class="suggestion-item" data-tag="${tag.name}">
+            <span class="suggestion-name">${tag.name}</span>
+            <span class="suggestion-count">${tag.tweet_count}</span>
+        </div>
+    `).join('');
+    suggestionsEl.classList.add('visible');
+
+    // Click to select
+    suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+            addTagToCurrentTweet(item.dataset.tag);
+            elements.quickTagInput.value = '';
+            suggestionsEl.classList.remove('visible');
+            elements.quickTagInput.focus();
+        });
+    });
 }
 
 async function addTagToCurrentTweet(tagName) {
@@ -146,7 +194,14 @@ async function removeTagFromCurrentTweet(tagName) {
 function setupTagInput() {
     if (!elements.quickTagInput) return;
 
+    // Autocomplete as you type
+    elements.quickTagInput.addEventListener('input', (e) => {
+        showAutocompleteSuggestions(e.target.value.trim());
+    });
+
     elements.quickTagInput.addEventListener('keydown', (e) => {
+        const suggestionsEl = document.getElementById('tagSuggestions');
+
         // Arrow keys trigger swipe even when input is focused
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
             e.preventDefault();
@@ -157,6 +212,7 @@ function setupTagInput() {
                 case 'ArrowDown': swipeCard('down'); break;
             }
             elements.quickTagInput.value = '';
+            if (suggestionsEl) suggestionsEl.classList.remove('visible');
             return;
         }
 
@@ -167,7 +223,13 @@ function setupTagInput() {
             if (tagName) {
                 addTagToCurrentTweet(tagName);
                 elements.quickTagInput.value = '';
+                if (suggestionsEl) suggestionsEl.classList.remove('visible');
             }
+        }
+
+        // Escape closes suggestions
+        if (e.key === 'Escape') {
+            if (suggestionsEl) suggestionsEl.classList.remove('visible');
         }
     });
 }

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tweet Curator - Swipe Mode</title>
-    <link rel="stylesheet" href="swipe.css?v=2024012001">
+    <link rel="stylesheet" href="swipe.css?v=2024012002">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -57,8 +57,11 @@
 
                 <!-- Tag Input (below cards) -->
                 <div class="tag-input-section">
-                    <input type="text" id="quickTagInput" class="quick-tag-input"
-                        placeholder="Type tag and press Enter..." autocomplete="off">
+                    <div class="tag-input-wrapper">
+                        <input type="text" id="quickTagInput" class="quick-tag-input"
+                            placeholder="Type tag and press Enter..." autocomplete="off">
+                        <div id="tagSuggestions" class="tag-suggestions"></div>
+                    </div>
                     <div id="currentTags" class="current-tags"></div>
                 </div>
 
@@ -103,7 +106,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="hammer.min.js"></script>
-    <script src="swipe.js?v=2024012001"></script>
+    <script src="swipe.js?v=2024012002"></script>
 </body>
 
 </html>

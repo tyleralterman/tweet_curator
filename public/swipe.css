@@ -192,6 +192,54 @@ body::before {
     opacity: 1;
 }
 
+/* Autocomplete Suggestions */
+.tag-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.tag-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+}
+
+.tag-suggestions.visible {
+    display: block;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.suggestion-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.suggestion-name {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.suggestion-count {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
 /* Hide sidebar on mobile */
 @media (max-width: 768px) {
     .tags-sidebar {
