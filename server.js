@@ -1012,7 +1012,10 @@ app.get('/api/swipe/queue', (req, res) => {
             "t.swipe_status IS NULL",
             "t.tweet_type NOT IN ('retweet', 'reply', 'thread')",
             // Exclude auto-tagged tweets (already decided by algorithm)
-            "t.id NOT IN (SELECT tt.tweet_id FROM tweet_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tg.name IN ('auto-like', 'auto-superlike'))"
+            "t.id NOT IN (SELECT tt.tweet_id FROM tweet_tags tt JOIN tags tg ON tt.tag_id = tg.id WHERE tg.name IN ('auto-like', 'auto-superlike'))",
+            // Exclude tweets mentioning tpot or twitter
+            "LOWER(t.full_text) NOT LIKE '%tpot%'",
+            "LOWER(t.full_text) NOT LIKE '%twitter%'"
         ];
         const params = [];
 
