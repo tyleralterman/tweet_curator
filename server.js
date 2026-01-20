@@ -1060,6 +1060,8 @@ app.get('/api/swipe/queue', (req, res) => {
             ${joinClause}
             WHERE ${whereClause}
             ORDER BY 
+                -- Prioritize Substack-ready tweets: short, not truncated, high engagement
+                CASE WHEN LENGTH(t.full_text) <= 280 AND t.full_text NOT LIKE '%…' THEN 0 ELSE 1 END,
                 t.favorite_count DESC,
                 t.created_at DESC
             LIMIT ?
