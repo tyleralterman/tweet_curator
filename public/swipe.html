@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tweet Curator - Swipe Mode</title>
-    <link rel="stylesheet" href="swipe.css?v=2024011801">
+    <link rel="stylesheet" href="swipe.css?v=2024012001">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -32,57 +32,78 @@
             <span class="session-count">Today: <strong id="todayCount">0</strong></span>
         </div>
 
-        <!-- Card Container -->
-        <div class="card-container">
-            <div id="cardStack" class="card-stack">
-                <!-- Cards will be inserted here -->
-                <div class="loading-state">
-                    <div class="spinner"></div>
-                    <p>Loading curated tweets...</p>
+        <!-- Main Content with Sidebar -->
+        <div class="swipe-main">
+            <!-- Tags Sidebar -->
+            <aside class="tags-sidebar" id="tagsSidebar">
+                <h3>🏷️ Topic Tags</h3>
+                <div id="topicTagsList" class="tags-list">
+                    <!-- Tags loaded dynamically -->
+                </div>
+            </aside>
+
+            <!-- Center Content -->
+            <div class="swipe-center">
+                <!-- Card Container -->
+                <div class="card-container">
+                    <div id="cardStack" class="card-stack">
+                        <!-- Cards will be inserted here -->
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading curated tweets...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tag Input (below cards) -->
+                <div class="tag-input-section">
+                    <input type="text" id="quickTagInput" class="quick-tag-input"
+                        placeholder="Type tag and press Enter..." autocomplete="off">
+                    <div id="currentTags" class="current-tags"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button id="btnUndo" class="action-btn undo" title="Undo (Z)" disabled>
+                        <span class="btn-icon">↺</span>
+                    </button>
+
+                    <button id="btnDislike" class="action-btn dislike" title="Pass (Left)">
+                        <span class="btn-icon">👎</span>
+                        <span class="btn-label">Pass</span>
+                    </button>
+
+                    <button id="btnReviewLater" class="action-btn review-later" title="Review Later (Down)">
+                        <span class="btn-icon">🔄</span>
+                        <span class="btn-label">Later</span>
+                    </button>
+
+                    <button id="btnSuperlike" class="action-btn superlike" title="Superlike (Up)">
+                        <span class="btn-icon">⭐</span>
+                        <span class="btn-label">Super</span>
+                    </button>
+
+                    <button id="btnLike" class="action-btn like" title="Like (Right)">
+                        <span class="btn-icon">❤️</span>
+                        <span class="btn-label">Like</span>
+                    </button>
+                </div>
+
+                <!-- Keyboard Hints -->
+                <div class="shortcuts-hint">
+                    <span>← Pass</span>
+                    <span>↓ Later</span>
+                    <span>↑ Super</span>
+                    <span>→ Like</span>
+                    <span>Z Undo</span>
                 </div>
             </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-            <button id="btnUndo" class="action-btn undo" title="Undo (Z)" disabled>
-                <span class="btn-icon">↺</span>
-            </button>
-
-            <button id="btnDislike" class="action-btn dislike" title="Pass (Left)">
-                <span class="btn-icon">👎</span>
-                <span class="btn-label">Pass</span>
-            </button>
-
-            <button id="btnReviewLater" class="action-btn review-later" title="Review Later (Down)">
-                <span class="btn-icon">🔄</span>
-                <span class="btn-label">Later</span>
-            </button>
-
-            <button id="btnSuperlike" class="action-btn superlike" title="Superlike (Up)">
-                <span class="btn-icon">⭐</span>
-                <span class="btn-label">Super</span>
-            </button>
-
-            <button id="btnLike" class="action-btn like" title="Like (Right)">
-                <span class="btn-icon">❤️</span>
-                <span class="btn-label">Like</span>
-            </button>
-        </div>
-
-        <!-- Keyboard Hints -->
-        <div class="shortcuts-hint">
-            <span>← Pass</span>
-            <span>↓ Later</span>
-            <span>↑ Super</span>
-            <span>→ Like</span>
-            <span>Z Undo</span>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="hammer.min.js"></script>
-    <script src="swipe.js?v=2024011801"></script>
+    <script src="swipe.js?v=2024012001"></script>
 </body>
 
 </html>

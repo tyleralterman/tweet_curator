@@ -22,7 +22,10 @@ const elements = {
     btnUndo: document.getElementById('btnUndo'),
     progressBar: document.getElementById('progressBar'),
     remainingCount: document.getElementById('remainingCount'),
-    todayCount: document.getElementById('todayCount')
+    todayCount: document.getElementById('todayCount'),
+    quickTagInput: document.getElementById('quickTagInput'),
+    currentTags: document.getElementById('currentTags'),
+    topicTagsList: document.getElementById('topicTagsList')
 };
 
 // Config
@@ -35,9 +38,11 @@ const SWIPE_THRESHOLD = 120; // Increased from 80 for mobile - requires more int
 
 async function init() {
     await fetchStats();
+    await loadTopicTags();
     await loadMoreTweets();
     setupEventHandlers();
     setupKeyboardShortcuts();
+    setupTagInput();
 
     // Load Twitter Widgets
     if (!window.twttr) {
@@ -45,6 +50,132 @@ async function init() {
         script.src = "https://platform.twitter.com/widgets.js";
         script.async = true;
         document.body.appendChild(script);
+    }
+}
+
+// ============================================
+// Tag Functions
+// ============================================
+
+async function loadTopicTags() {
+    try {
+        const response = await fetch('/api/tags');
+        const tags = await response.json();
+
+        // Filter to topic tags only and sort by count
+        const topicTags = tags
+            .filter(t => t.category === 'topic')
+            .sort((a, b) => b.tweet_count - a.tweet_count)
+            .slice(0, 30);
+
+        if (elements.topicTagsList) {
+            elements.topicTagsList.innerHTML = topicTags.map(tag => `
+                <div class="tag-item" data-tag="${tag.name}">${tag.name}</div>
+            `).join('');
+
+            // Click to add tag
+            elements.topicTagsList.querySelectorAll('.tag-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const tagName = item.dataset.tag;
+                    addTagToCurrentTweet(tagName);
+                });
+            });
+        }
+    } catch (err) {
+        console.error('Error loading topic tags:', err);
+    }
+}
+
+async function addTagToCurrentTweet(tagName) {
+    const card = elements.cardStack?.querySelector('.tweet-card');
+    if (!card) return;
+
+    const tweetId = card.dataset.id;
+    try {
+        const response = await fetch(`/api/tweets/${tweetId}/tags`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagName, tagCategory: 'custom' })
+        });
+
+        if (response.ok) {
+            updateCurrentTagsDisplay(tweetId);
+        }
+    } catch (err) {
+        console.error('Error adding tag:', err);
+    }
+}
+
+async function updateCurrentTagsDisplay(tweetId) {
+    if (!elements.currentTags) return;
+
+    try {
+        const response = await fetch(`/api/tweets/${tweetId}`);
+        const tweet = await response.json();
+
+        if (tweet.tags && tweet.tags.length > 0) {
+            elements.currentTags.innerHTML = tweet.tags.map(tag => `
+                <span class="tag-chip" data-tag="${tag.name}">
+                    ${tag.name}
+                    <span class="remove-tag" onclick="removeTagFromCurrentTweet('${tag.name}')">×</span>
+                </span>
+            `).join('');
+        } else {
+            elements.currentTags.innerHTML = '';
+        }
+    } catch (err) {
+        console.error('Error updating tags display:', err);
+    }
+}
+
+async function removeTagFromCurrentTweet(tagName) {
+    const card = elements.cardStack?.querySelector('.tweet-card');
+    if (!card) return;
+
+    const tweetId = card.dataset.id;
+    try {
+        await fetch(`/api/tweets/${tweetId}/tags/${encodeURIComponent(tagName)}`, {
+            method: 'DELETE'
+        });
+        updateCurrentTagsDisplay(tweetId);
+    } catch (err) {
+        console.error('Error removing tag:', err);
+    }
+}
+
+function setupTagInput() {
+    if (!elements.quickTagInput) return;
+
+    elements.quickTagInput.addEventListener('keydown', (e) => {
+        // Arrow keys trigger swipe even when input is focused
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+            e.preventDefault();
+            switch (e.key) {
+                case 'ArrowRight': swipeCard('right'); break;
+                case 'ArrowLeft': swipeCard('left'); break;
+                case 'ArrowUp': swipeCard('up'); break;
+                case 'ArrowDown': swipeCard('down'); break;
+            }
+            elements.quickTagInput.value = '';
+            return;
+        }
+
+        // Enter submits the tag
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const tagName = elements.quickTagInput.value.trim().toLowerCase();
+            if (tagName) {
+                addTagToCurrentTweet(tagName);
+                elements.quickTagInput.value = '';
+            }
+        }
+    });
+}
+
+// Focus the tag input when a new card appears
+function focusTagInput() {
+    if (elements.quickTagInput) {
+        setTimeout(() => elements.quickTagInput.focus(), 100);
     }
 }
 
@@ -177,6 +308,13 @@ function renderCards() {
                     <p>Loading curated tweets...</p>
                 </div>
             `;
+        }
+
+        // Focus tag input and update current tags display for top card
+        const topCard = cardStack.querySelector('.tweet-card');
+        if (topCard) {
+            updateCurrentTagsDisplay(topCard.dataset.id);
+            focusTagInput();
         }
     } catch (err) {
         console.error('Error in renderCards:', err);
