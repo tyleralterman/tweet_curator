@@ -678,12 +678,15 @@ function undoSwipe() {
         body: JSON.stringify({ swipe_status: null, is_reviewed: 0 }) // Reset
     });
 
+    // Remove from seenIds so it can appear again
+    state.seenIds.delete(lastAction.id);
+
     // Update stats
     state.stats.remaining++;
     state.stats.today--;
     updateStatsUI();
 
-    // Reload cards to get it back (simplest way)
+    // Clear current cards and reload to get the tweet back
     state.queue = [];
     elements.cardStack.innerHTML = '';
     loadMoreTweets();
