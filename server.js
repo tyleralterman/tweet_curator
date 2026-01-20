@@ -114,6 +114,55 @@ try {
     console.log('Note: first_impressions migration:', e.message);
 }
 
+// ============================================
+// Auto-tagging for recirculation (runs on startup)
+// ============================================
+try {
+    // Helper to ensure tag exists
+    function ensureTag(name, category = 'use') {
+        let tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(name);
+        if (!tag) {
+            db.prepare('INSERT INTO tags (name, category, color) VALUES (?, ?, ?)').run(name, category, '#8e44ad');
+            tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(name);
+            console.log(`   Created "${name}" tag`);
+        }
+        return tag.id;
+    }
+
+    const insertTag = db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)');
+
+    // "like" tag: < 281 chars AND > 99 likes
+    const likeTagId = ensureTag('like', 'use');
+    const likeTweets = db.prepare(`
+        SELECT t.id FROM tweets t
+        WHERE LENGTH(t.full_text) < 281 AND t.favorite_count > 99
+        AND t.id NOT IN (SELECT tweet_id FROM tweet_tags WHERE tag_id = ?)
+    `).all(likeTagId);
+
+    let likeAdded = 0;
+    for (const t of likeTweets) {
+        if (insertTag.run(t.id, likeTagId, 'ai').changes > 0) likeAdded++;
+    }
+    if (likeAdded > 0) console.log(`✅ Added "like" tag to ${likeAdded} tweets`);
+
+    // "superlike" tag: > 550 chars AND > 59 likes
+    const superlikeTagId = ensureTag('superlike', 'use');
+    const superlikeTweets = db.prepare(`
+        SELECT t.id FROM tweets t
+        WHERE LENGTH(t.full_text) > 550 AND t.favorite_count > 59
+        AND t.id NOT IN (SELECT tweet_id FROM tweet_tags WHERE tag_id = ?)
+    `).all(superlikeTagId);
+
+    let superlikeAdded = 0;
+    for (const t of superlikeTweets) {
+        if (insertTag.run(t.id, superlikeTagId, 'ai').changes > 0) superlikeAdded++;
+    }
+    if (superlikeAdded > 0) console.log(`✅ Added "superlike" tag to ${superlikeAdded} tweets`);
+
+} catch (e) {
+    console.log('Note: auto-tagging:', e.message);
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
