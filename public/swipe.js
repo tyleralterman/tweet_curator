@@ -786,6 +786,9 @@ function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (state.loading) return;
 
+        // Skip if tag input is focused - it has its own handlers
+        if (document.activeElement === elements.quickTagInput) return;
+
         switch (e.key) {
             case 'ArrowRight':
                 swipeCard('right');
@@ -796,9 +799,7 @@ function setupKeyboardShortcuts() {
             case 'ArrowUp':
                 swipeCard('up');
                 break;
-            case 'ArrowDown':
-                swipeCard('down');
-                break;
+            // ArrowDown removed - only navigates autocomplete now
             case 'z':
             case 'Z':
                 if (!elements.btnUndo.disabled) undoSwipe();
