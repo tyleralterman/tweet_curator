@@ -212,27 +212,34 @@ async function postToSubstack(content, mediaPath = null) {
             }
         }
 
-        // Step 5: Submit the post using Cmd+Enter (confirmed to work)
-        log('Submitting post with Cmd+Enter...');
+        // Step 5: Submit the post using Ctrl+Enter (Linux) or Cmd+Enter (Mac)
+        log('Submitting post with Ctrl+Enter...');
         await delay(500);
 
-        // Take screenshot before posting
-        await page.screenshot({ path: '/tmp/substack-before-post.png' });
-        log('Screenshot saved: /tmp/substack-before-post.png');
-
-        // Use Meta+Enter (Cmd+Enter on Mac)
-        await page.keyboard.down('Meta');
+        // Try Ctrl+Enter (works on Linux/Windows and web apps)
+        await page.keyboard.down('Control');
         await page.keyboard.press('Enter');
-        await page.keyboard.up('Meta');
+        await page.keyboard.up('Control');
 
-        log('Sent Cmd+Enter, waiting for post to submit...');
-        await delay(5000); // Wait for post to submit
+        await delay(1000);
 
-        // Take screenshot after
-        await page.screenshot({ path: '/tmp/substack-after-post.png' });
-        log('Screenshot saved: /tmp/substack-after-post.png');
+        // Also try clicking the Post button as backup
+        log('Also trying to click Post button...');
+        await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            for (const btn of buttons) {
+                const text = btn.textContent.trim().toLowerCase();
+                if (text === 'post' && !btn.disabled && btn.offsetParent !== null) {
+                    btn.click();
+                    return true;
+                }
+            }
+        });
 
-        log('✅ Posted successfully!');
+        log('Waiting for post to submit...');
+        await delay(5000);
+
+        log('✅ Posted (assuming success - check Substack)');
         return { success: true };
 
     } catch (error) {
