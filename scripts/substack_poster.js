@@ -156,51 +156,53 @@ async function postToSubstack(content, mediaPath = null) {
 
         await delay(2000);
 
-        // Take screenshot after clicking
-        await page.screenshot({ path: '/tmp/substack-composer-opened.png' });
-        log('Screenshot saved: /tmp/substack-composer-opened.png');
+        // Step 4: Find the main composer at the top of the page
+        // The "What's on your mind?" composer is typically the FIRST visible one
+        log('Looking for the main composer...');
 
-        // Step 4: Find the actual composer and type content
-        log('Looking for composer to type in...');
-        const composerSelectors = [
-            '[contenteditable="true"]',
-            '.ProseMirror',
-            'div[role="textbox"]',
-            'textarea',
-            '[data-testid="notes-composer"]'
-        ];
-
-        let composer = null;
-        for (const selector of composerSelectors) {
-            const elements = await page.$$(selector);
-            if (elements.length > 0) {
-                // Use the last one (usually the active/focused one)
-                composer = elements[elements.length - 1];
-                log(`Found composer with selector: ${selector} (${elements.length} matches)`);
-                break;
+        // First, look for the composer by its placeholder or nearby text
+        let composer = await page.evaluateHandle(() => {
+            // Find all contenteditable elements
+            const editors = document.querySelectorAll('[contenteditable="true"], .ProseMirror');
+            for (const ed of editors) {
+                // Get the nearest container
+                const container = ed.closest('div');
+                if (container) {
+                    // Check if this looks like the main composer (near top of page)
+                    const rect = ed.getBoundingClientRect();
+                    // Main composer should be in the upper portion of the viewport
+                    if (rect.top < 400 && rect.top > 0 && ed.offsetParent !== null) {
+                        return ed;
+                    }
+                }
             }
-        }
+            // Fallback to first visible one
+            for (const ed of editors) {
+                if (ed.offsetParent !== null) {
+                    return ed;
+                }
+            }
+            return null;
+        });
 
         if (!composer) {
-            await page.screenshot({ path: '/tmp/substack-no-composer.png' });
-            throw new Error('Could not find composer. Screenshot saved.');
+            throw new Error('Could not find composer');
         }
 
-        // Click to focus the composer
+        log('Found main composer, clicking to focus...');
         await composer.click();
-        await delay(300);
+        await delay(500);
 
-        // Insert content directly (much faster than keyboard.type which types char by char)
-        log(`Inserting content (${content.length} chars)...`);
-        await page.evaluate((text) => {
-            // For ProseMirror editors, we can insert text via execCommand or direct DOM manipulation
-            const editor = document.querySelector('.ProseMirror, [contenteditable="true"]');
-            if (editor) {
-                editor.focus();
-                // Use execCommand for contenteditable
-                document.execCommand('insertText', false, text);
-            }
-        }, content);
+        // Type the content using page.type() which properly triggers input events
+        // This is slower but more reliable than execCommand
+        log(`Typing content: "${content.substring(0, 50)}..."`);
+
+        // Strip emojis for now to avoid encoding issues
+        const cleanContent = content.replace(/[\u{1F600}-\u{1F6FF}|\u{2600}-\u{26FF}|\u{2700}-\u{27BF}|\u{1F900}-\u{1F9FF}|\u{1F1E0}-\u{1F1FF}]/gu, '').trim();
+
+        // Type slowly but not too slow
+        await page.keyboard.type(cleanContent, { delay: 10 });
+        log('Content typed');
         await delay(500);
 
         if (mediaPath && fs.existsSync(mediaPath)) {
