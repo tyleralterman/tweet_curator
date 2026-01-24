@@ -58,39 +58,86 @@ async function postToSubstack(content, mediaPath = null) {
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
 
-        // Go to Substack Notes page
+        // Go to Substack login page directly first
+        log('Navigating to Substack login...');
+        await page.goto('https://substack.com/sign-in', { waitUntil: 'networkidle2' });
+
+        // Wait for and fill email
+        await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 15000 });
+        log('Entering email...');
+        await page.type('input[type="email"], input[name="email"]', SUBSTACK_EMAIL);
+
+        // Look for continue/submit button
+        const buttons = await page.$$('button');
+        for (const button of buttons) {
+            const text = await page.evaluate(el => el.textContent, button);
+            if (text && (text.includes('Continue') || text.includes('Sign in') || text.includes('Submit'))) {
+                await button.click();
+                break;
+            }
+        }
+
+        await page.waitForTimeout(2000);
+
+        // Check for password field (some accounts use password, others use magic link)
+        const passwordInput = await page.$('input[type="password"]');
+        if (passwordInput) {
+            log('Entering password...');
+            await page.type('input[type="password"]', SUBSTACK_PASSWORD);
+
+            // Click sign in button
+            const signInButtons = await page.$$('button');
+            for (const button of signInButtons) {
+                const text = await page.evaluate(el => el.textContent, button);
+                if (text && (text.includes('Sign in') || text.includes('Continue') || text.includes('Log in'))) {
+                    await button.click();
+                    break;
+                }
+            }
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => { });
+        }
+
+        log('Logged in, navigating to Notes...');
+        await page.waitForTimeout(2000);
+
+        // Now go to Notes
         const notesUrl = `https://${SUBSTACK_PUBLICATION}.substack.com/notes`;
         log(`Navigating to ${notesUrl}`);
         await page.goto(notesUrl, { waitUntil: 'networkidle2' });
+        await page.waitForTimeout(3000);
 
-        // Check if we need to login
-        const needsLogin = await page.$('input[type="email"]');
-        if (needsLogin) {
-            log('Logging in...');
-            await page.type('input[type="email"]', SUBSTACK_EMAIL);
-            await page.click('button[type="submit"]');
-            await page.waitForNavigation({ waitUntil: 'networkidle2' });
+        // Try multiple selectors for the composer
+        const composerSelectors = [
+            '[data-testid="notes-composer"]',
+            '[contenteditable="true"]',
+            'div[role="textbox"]',
+            '.ProseMirror',
+            'textarea'
+        ];
 
-            // Enter password if prompted
-            const passwordInput = await page.$('input[type="password"]');
-            if (passwordInput) {
-                await page.type('input[type="password"]', SUBSTACK_PASSWORD);
-                await page.click('button[type="submit"]');
-                await page.waitForNavigation({ waitUntil: 'networkidle2' });
+        let composer = null;
+        for (const selector of composerSelectors) {
+            composer = await page.$(selector);
+            if (composer) {
+                log(`Found composer with selector: ${selector}`);
+                break;
             }
-            log('Logged in successfully');
         }
 
-        // Wait for the notes composer to load
-        await page.waitForSelector('[data-testid="notes-composer"]', { timeout: 10000 });
+        if (!composer) {
+            // Take screenshot for debugging
+            await page.screenshot({ path: '/tmp/substack-debug.png' });
+            throw new Error('Could not find notes composer. Screenshot saved to /tmp/substack-debug.png');
+        }
 
         // Click to focus the composer
-        await page.click('[data-testid="notes-composer"]');
+        await composer.click();
         await page.waitForTimeout(500);
 
         // Type the content
         log(`Typing content (${content.length} chars)...`);
         await page.keyboard.type(content);
+        await page.waitForTimeout(1000);
 
         // Upload media if present
         if (mediaPath && fs.existsSync(mediaPath)) {
@@ -102,10 +149,27 @@ async function postToSubstack(content, mediaPath = null) {
             }
         }
 
-        // Click Post button
-        log('Clicking Post button...');
-        await page.click('button:has-text("Post")');
-        await page.waitForTimeout(2000);
+        // Click Post button - try multiple approaches
+        log('Looking for Post button...');
+        const postButtons = await page.$$('button');
+        let clicked = false;
+        for (const button of postButtons) {
+            const text = await page.evaluate(el => el.textContent, button);
+            if (text && text.trim() === 'Post') {
+                await button.click();
+                clicked = true;
+                break;
+            }
+        }
+
+        if (!clicked) {
+            // Try keyboard shortcut
+            await page.keyboard.down('Meta');
+            await page.keyboard.press('Enter');
+            await page.keyboard.up('Meta');
+        }
+
+        await page.waitForTimeout(3000);
 
         log('✅ Posted successfully!');
         return { success: true };
