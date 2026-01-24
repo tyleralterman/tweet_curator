@@ -169,14 +169,24 @@ async function postToSubstack(content, mediaPath = null) {
 
         log('Found composer, clicking to focus...');
         await composer.click();
-        await delay(300);
+        await delay(200);
 
-        // Type the content - strip emojis to avoid issues
+        // Strip emojis to avoid issues
         const cleanContent = content.replace(/[\u{1F600}-\u{1F6FF}|\u{2600}-\u{26FF}|\u{2700}-\u{27BF}|\u{1F900}-\u{1F9FF}|\u{1F1E0}-\u{1F1FF}]/gu, '').trim();
-        log(`Typing ${cleanContent.length} chars...`);
+        log(`Inserting ${cleanContent.length} chars...`);
 
-        await page.keyboard.type(cleanContent, { delay: 5 });
-        log('Content typed');
+        // Direct DOM injection - instant instead of typing
+        await page.evaluate((text) => {
+            const editor = document.querySelector('.ProseMirror');
+            if (editor) {
+                // Set innerHTML with a paragraph
+                editor.innerHTML = `<p>${text}</p>`;
+                // Trigger input event so ProseMirror knows content changed
+                editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }, cleanContent);
+
+        log('Content inserted');
         await delay(300);
 
         if (mediaPath && fs.existsSync(mediaPath)) {
