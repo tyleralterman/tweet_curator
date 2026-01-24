@@ -35,6 +35,9 @@ const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const FORCE = args.includes('--force');
 
+// Helper for delays (replaces deprecated waitForTimeout)
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 // ============================================
 // Logging
 // ============================================
@@ -77,7 +80,7 @@ async function postToSubstack(content, mediaPath = null) {
             }
         }
 
-        await page.waitForTimeout(2000);
+        await delay(2000);
 
         // Check for password field (some accounts use password, others use magic link)
         const passwordInput = await page.$('input[type="password"]');
@@ -98,13 +101,13 @@ async function postToSubstack(content, mediaPath = null) {
         }
 
         log('Logged in, navigating to Notes...');
-        await page.waitForTimeout(2000);
+        await delay(2000);
 
         // Now go to Notes
         const notesUrl = `https://${SUBSTACK_PUBLICATION}.substack.com/notes`;
         log(`Navigating to ${notesUrl}`);
         await page.goto(notesUrl, { waitUntil: 'networkidle2' });
-        await page.waitForTimeout(3000);
+        await delay(3000);
 
         // Try multiple selectors for the composer
         const composerSelectors = [
@@ -132,12 +135,12 @@ async function postToSubstack(content, mediaPath = null) {
 
         // Click to focus the composer
         await composer.click();
-        await page.waitForTimeout(500);
+        await delay(500);
 
         // Type the content
         log(`Typing content (${content.length} chars)...`);
         await page.keyboard.type(content);
-        await page.waitForTimeout(1000);
+        await delay(1000);
 
         // Upload media if present
         if (mediaPath && fs.existsSync(mediaPath)) {
@@ -145,7 +148,7 @@ async function postToSubstack(content, mediaPath = null) {
             const fileInput = await page.$('input[type="file"]');
             if (fileInput) {
                 await fileInput.uploadFile(mediaPath);
-                await page.waitForTimeout(2000); // Wait for upload
+                await delay(2000); // Wait for upload
             }
         }
 
@@ -169,7 +172,7 @@ async function postToSubstack(content, mediaPath = null) {
             await page.keyboard.up('Meta');
         }
 
-        await page.waitForTimeout(3000);
+        await delay(3000);
 
         log('✅ Posted successfully!');
         return { success: true };
