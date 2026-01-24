@@ -54,7 +54,8 @@ function log(msg) {
 async function postToSubstack(content, mediaPath = null) {
     const browser = await puppeteer.launch({
         headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        protocolTimeout: 120000  // 2 minute timeout for slow operations
     });
 
     try {
@@ -156,54 +157,27 @@ async function postToSubstack(content, mediaPath = null) {
 
         await delay(2000);
 
-        // Step 4: Find the main composer at the top of the page
-        // The "What's on your mind?" composer is typically the FIRST visible one
-        log('Looking for the main composer...');
+        // Step 4: Find and focus the composer (simplified approach)
+        log('Looking for composer...');
 
-        // First, look for the composer by its placeholder or nearby text
-        let composer = await page.evaluateHandle(() => {
-            // Find all contenteditable elements
-            const editors = document.querySelectorAll('[contenteditable="true"], .ProseMirror');
-            for (const ed of editors) {
-                // Get the nearest container
-                const container = ed.closest('div');
-                if (container) {
-                    // Check if this looks like the main composer (near top of page)
-                    const rect = ed.getBoundingClientRect();
-                    // Main composer should be in the upper portion of the viewport
-                    if (rect.top < 400 && rect.top > 0 && ed.offsetParent !== null) {
-                        return ed;
-                    }
-                }
-            }
-            // Fallback to first visible one
-            for (const ed of editors) {
-                if (ed.offsetParent !== null) {
-                    return ed;
-                }
-            }
-            return null;
-        });
+        // Use simple selector - first ProseMirror should be the main composer
+        const composer = await page.$('.ProseMirror');
 
         if (!composer) {
-            throw new Error('Could not find composer');
+            throw new Error('Could not find .ProseMirror composer');
         }
 
-        log('Found main composer, clicking to focus...');
+        log('Found composer, clicking to focus...');
         await composer.click();
-        await delay(500);
+        await delay(300);
 
-        // Type the content using page.type() which properly triggers input events
-        // This is slower but more reliable than execCommand
-        log(`Typing content: "${content.substring(0, 50)}..."`);
-
-        // Strip emojis for now to avoid encoding issues
+        // Type the content - strip emojis to avoid issues
         const cleanContent = content.replace(/[\u{1F600}-\u{1F6FF}|\u{2600}-\u{26FF}|\u{2700}-\u{27BF}|\u{1F900}-\u{1F9FF}|\u{1F1E0}-\u{1F1FF}]/gu, '').trim();
+        log(`Typing ${cleanContent.length} chars...`);
 
-        // Type slowly but not too slow
-        await page.keyboard.type(cleanContent, { delay: 10 });
+        await page.keyboard.type(cleanContent, { delay: 5 });
         log('Content typed');
-        await delay(500);
+        await delay(300);
 
         if (mediaPath && fs.existsSync(mediaPath)) {
             log(`Uploading media: ${mediaPath}`);
