@@ -188,12 +188,20 @@ async function postToSubstack(content, mediaPath = null) {
 
         // Click to focus the composer
         await composer.click();
-        await delay(500);
+        await delay(300);
 
-        // Type the content
-        log(`Typing content (${content.length} chars)...`);
-        await page.keyboard.type(content);
-        await delay(1000);
+        // Insert content directly (much faster than keyboard.type which types char by char)
+        log(`Inserting content (${content.length} chars)...`);
+        await page.evaluate((text) => {
+            // For ProseMirror editors, we can insert text via execCommand or direct DOM manipulation
+            const editor = document.querySelector('.ProseMirror, [contenteditable="true"]');
+            if (editor) {
+                editor.focus();
+                // Use execCommand for contenteditable
+                document.execCommand('insertText', false, text);
+            }
+        }, content);
+        await delay(500);
 
         if (mediaPath && fs.existsSync(mediaPath)) {
             log(`Uploading media: ${mediaPath}`);
