@@ -61,7 +61,7 @@ async function postToSubstack(content, mediaPath = null) {
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
 
-        // Go to Substack login page directly first
+        // Step 1: Go to Substack login page
         log('Navigating to Substack login...');
         await page.goto('https://substack.com/sign-in', { waitUntil: 'networkidle2' });
 
@@ -71,7 +71,7 @@ async function postToSubstack(content, mediaPath = null) {
         await page.type('input[type="email"], input[name="email"]', SUBSTACK_EMAIL);
 
         // Look for continue/submit button
-        const buttons = await page.$$('button');
+        let buttons = await page.$$('button');
         for (const button of buttons) {
             const text = await page.evaluate(el => el.textContent, button);
             if (text && (text.includes('Continue') || text.includes('Sign in') || text.includes('Submit'))) {
@@ -82,13 +82,12 @@ async function postToSubstack(content, mediaPath = null) {
 
         await delay(2000);
 
-        // Check for password field (some accounts use password, others use magic link)
+        // Check for password field
         const passwordInput = await page.$('input[type="password"]');
         if (passwordInput) {
             log('Entering password...');
             await page.type('input[type="password"]', SUBSTACK_PASSWORD);
 
-            // Click sign in button
             const signInButtons = await page.$$('button');
             for (const button of signInButtons) {
                 const text = await page.evaluate(el => el.textContent, button);
@@ -100,37 +99,107 @@ async function postToSubstack(content, mediaPath = null) {
             await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => { });
         }
 
-        log('Logged in, navigating to Notes...');
+        log('Logged in successfully');
         await delay(2000);
 
-        // Now go to Notes
-        const notesUrl = `https://${SUBSTACK_PUBLICATION}.substack.com/notes`;
-        log(`Navigating to ${notesUrl}`);
-        await page.goto(notesUrl, { waitUntil: 'networkidle2' });
-        await delay(3000);
+        // Step 2: Navigate to profile page where Create button is
+        const profileUrl = `https://substack.com/@${SUBSTACK_PUBLICATION}`;
+        log(`Navigating to ${profileUrl}`);
+        await page.goto(profileUrl, { waitUntil: 'networkidle2' });
+        await delay(2000);
 
-        // Try multiple selectors for the composer
+        // Take screenshot for debugging
+        await page.screenshot({ path: '/tmp/substack-profile.png' });
+        log('Screenshot saved: /tmp/substack-profile.png');
+
+        // Step 3: Click the "Create" button
+        log('Looking for Create button...');
+        let createClicked = await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            for (const btn of buttons) {
+                const text = btn.textContent.trim().toLowerCase();
+                if (text === 'create' && btn.offsetParent !== null) {
+                    btn.click();
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (!createClicked) {
+            // Try looking for Create in dropdown or sidebar
+            createClicked = await page.evaluate(() => {
+                const elements = document.querySelectorAll('[class*="create"], [aria-label*="Create"], button, a');
+                for (const el of elements) {
+                    const text = el.textContent.trim().toLowerCase();
+                    if (text === 'create' && el.offsetParent !== null) {
+                        el.click();
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
+
+        if (!createClicked) {
+            await page.screenshot({ path: '/tmp/substack-no-create.png' });
+            throw new Error('Could not find Create button. Screenshot saved.');
+        }
+
+        log('Clicked Create button, waiting for menu...');
+        await delay(1500);
+
+        // Step 4: Click "Note" in the menu
+        log('Looking for Note option...');
+        let noteClicked = await page.evaluate(() => {
+            // Look for "Note" text in the dropdown/menu
+            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *');
+            for (const el of elements) {
+                const text = el.textContent.trim().toLowerCase();
+                if (text === 'note' && el.offsetParent !== null) {
+                    el.click();
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (!noteClicked) {
+            await page.screenshot({ path: '/tmp/substack-no-note.png' });
+            throw new Error('Could not find Note option in menu. Screenshot saved.');
+        }
+
+        log('Clicked Note, waiting for overlay...');
+        await delay(2000);
+
+        // Take screenshot of the overlay
+        await page.screenshot({ path: '/tmp/substack-note-overlay.png' });
+        log('Screenshot saved: /tmp/substack-note-overlay.png');
+
+        // Step 5: Find the composer in the overlay and type content
+        log('Looking for composer in overlay...');
         const composerSelectors = [
-            '[data-testid="notes-composer"]',
             '[contenteditable="true"]',
-            'div[role="textbox"]',
             '.ProseMirror',
-            'textarea'
+            'div[role="textbox"]',
+            'textarea',
+            '[data-testid="notes-composer"]'
         ];
 
         let composer = null;
         for (const selector of composerSelectors) {
-            composer = await page.$(selector);
-            if (composer) {
-                log(`Found composer with selector: ${selector}`);
+            const elements = await page.$$(selector);
+            // Get the last one (overlay composer is usually added after page composer)
+            if (elements.length > 0) {
+                composer = elements[elements.length - 1];
+                log(`Found composer with selector: ${selector} (${elements.length} matches, using last)`);
                 break;
             }
         }
 
         if (!composer) {
-            // Take screenshot for debugging
-            await page.screenshot({ path: '/tmp/substack-debug.png' });
-            throw new Error('Could not find notes composer. Screenshot saved to /tmp/substack-debug.png');
+            await page.screenshot({ path: '/tmp/substack-no-composer.png' });
+            throw new Error('Could not find composer in overlay. Screenshot saved.');
         }
 
         // Click to focus the composer
@@ -142,46 +211,41 @@ async function postToSubstack(content, mediaPath = null) {
         await page.keyboard.type(content);
         await delay(1000);
 
-        // Upload media if present
         if (mediaPath && fs.existsSync(mediaPath)) {
             log(`Uploading media: ${mediaPath}`);
             const fileInput = await page.$('input[type="file"]');
             if (fileInput) {
                 await fileInput.uploadFile(mediaPath);
-                await delay(2000); // Wait for upload
+                await delay(2000);
             }
         }
 
-        // Click Post button - try multiple approaches
-        log('Looking for Post button...');
-        await delay(1000); // Wait for UI to settle
+        // Step 6: Click the Post button in the overlay
+        log('Looking for Post button in overlay...');
+        await delay(1000);
 
-        // Take screenshot before attempting to click
+        // Take screenshot before clicking Post
         await page.screenshot({ path: '/tmp/substack-before-post.png' });
         log('Screenshot saved: /tmp/substack-before-post.png');
 
-        // First, log all buttons we can see for debugging
+        // Log all visible buttons for debugging
         const buttonInfo = await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
             return buttons.map(btn => ({
                 text: btn.textContent.trim().substring(0, 30),
                 disabled: btn.disabled,
-                className: btn.className.substring(0, 50),
                 visible: btn.offsetParent !== null
             })).filter(b => b.visible);
         });
-        log(`Found ${buttonInfo.length} visible buttons: ${JSON.stringify(buttonInfo.slice(0, 5))}`);
+        log(`Found ${buttonInfo.length} visible buttons: ${JSON.stringify(buttonInfo.slice(-10))}`);
 
-        let clicked = false;
-
-        // Approach 1: Find button containing "Post" text (case-insensitive, partial match)
-        clicked = await page.evaluate(() => {
+        let postClicked = await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
-            for (const btn of buttons) {
+            // Look from the end (overlay buttons are usually last in DOM)
+            for (let i = buttons.length - 1; i >= 0; i--) {
+                const btn = buttons[i];
                 const text = btn.textContent.trim().toLowerCase();
-                // Match "Post" but not "Posted" or "Repost"
-                if ((text === 'post' || text === 'post note' || text.match(/^post$/i)) && !btn.disabled) {
-                    console.log('Found Post button:', text);
+                if (text === 'post' && !btn.disabled && btn.offsetParent !== null) {
                     btn.click();
                     return true;
                 }
@@ -189,24 +253,18 @@ async function postToSubstack(content, mediaPath = null) {
             return false;
         });
 
-        if (!clicked) {
-            log('Approach 1 failed, trying Approach 2 (dialog/modal Post button)...');
-            // Approach 2: Look for Post button in a dialog/modal context (like the dropdown shown in screenshot)
-            clicked = await page.evaluate(() => {
-                // Look in modal, dialog, dropdown contexts
-                const selectors = [
-                    'div[role="dialog"] button',
-                    'div[role="menu"] button',
-                    '.modal button',
-                    '[class*="modal"] button',
-                    '[class*="dialog"] button',
-                    '[class*="dropdown"] button'
-                ];
-                for (const selector of selectors) {
-                    const buttons = document.querySelectorAll(selector);
-                    for (const btn of buttons) {
-                        const text = btn.textContent.trim().toLowerCase();
-                        if (text === 'post' && !btn.disabled && btn.offsetParent !== null) {
+        if (!postClicked) {
+            log('Direct Post button click failed, trying alternative selectors...');
+            // Try finding button near Cancel (they're usually together)
+            postClicked = await page.evaluate(() => {
+                const allButtons = Array.from(document.querySelectorAll('button'));
+                for (const btn of allButtons) {
+                    const text = btn.textContent.trim();
+                    // Look for Post that's near Cancel
+                    if (text === 'Post' && btn.offsetParent !== null) {
+                        const rect = btn.getBoundingClientRect();
+                        // Make sure it's visible in viewport
+                        if (rect.top > 0 && rect.left > 0) {
                             btn.click();
                             return true;
                         }
@@ -216,91 +274,33 @@ async function postToSubstack(content, mediaPath = null) {
             });
         }
 
-        if (!clicked) {
-            log('Approach 2 failed, trying Approach 3 (XPath text search)...');
-            // Approach 3: Use XPath to find button with exact "Post" text
-            try {
-                const postButtons = await page.$x("//button[normalize-space(text())='Post']");
-                if (postButtons.length > 0) {
-                    for (const btn of postButtons) {
-                        const isDisabled = await page.evaluate(el => el.disabled, btn);
-                        const isVisible = await page.evaluate(el => el.offsetParent !== null, btn);
-                        if (!isDisabled && isVisible) {
-                            await btn.click();
-                            clicked = true;
-                            log('Clicked Post button via XPath');
-                            break;
-                        }
-                    }
-                }
-            } catch (e) {
-                log(`XPath approach error: ${e.message}`);
-            }
-        }
+        await delay(5000); // Wait for post to submit
 
-        if (!clicked) {
-            log('Approach 3 failed, trying Approach 4 (coordinate click)...');
-            // Approach 4: Look for and click the Post button by finding it near the composer
-            // The screenshot shows a "Post" button in a popover/dropdown
-            clicked = await page.evaluate(() => {
-                const allElements = document.querySelectorAll('*');
-                for (const el of allElements) {
-                    if (el.tagName === 'BUTTON' || el.role === 'button') {
-                        const text = el.textContent.trim();
-                        if (text === 'Post' && el.offsetParent !== null) {
-                            el.click();
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            });
-        }
-
-        if (!clicked) {
-            log('Approach 4 failed, trying Ctrl+Enter keyboard shortcut...');
-            // Approach 5: Try Ctrl+Enter (works on some platforms)
-            await page.keyboard.down('Control');
-            await page.keyboard.press('Enter');
-            await page.keyboard.up('Control');
-            await delay(1000);
-
-            // Also try Meta+Enter for Mac
-            await page.keyboard.down('Meta');
-            await page.keyboard.press('Enter');
-            await page.keyboard.up('Meta');
-        }
-
-        await delay(5000); // Wait longer for post to actually submit
-
-        // Take screenshot after to verify
+        // Take screenshot after
         await page.screenshot({ path: '/tmp/substack-after-post.png' });
         log('Screenshot saved: /tmp/substack-after-post.png');
 
-        // Verify the post actually went through by checking for success indicators
+        // Verify the post went through
         const postVerified = await page.evaluate(() => {
-            // Check if composer is now empty (post was submitted)
-            const composer = document.querySelector('.ProseMirror, [contenteditable="true"]');
-            if (composer && composer.textContent.trim() === '') {
-                return true;
+            // Check if overlay closed (no more modal)
+            const overlay = document.querySelector('[class*="modal"], [class*="overlay"], [role="dialog"]');
+            if (!overlay || overlay.offsetParent === null) {
+                return true; // Overlay closed = likely success
             }
-            // Check for success toast/notification
-            const successIndicators = document.querySelectorAll('[class*="success"], [class*="toast"], [role="alert"]');
-            for (const el of successIndicators) {
-                if (el.textContent.toLowerCase().includes('posted') || el.textContent.toLowerCase().includes('success')) {
-                    return true;
-                }
+            // Check for success indicators
+            const page = document.body.textContent.toLowerCase();
+            if (page.includes('posted') || page.includes('your note')) {
+                return true;
             }
             return false;
         });
 
-        if (clicked || postVerified) {
+        if (postClicked || postVerified) {
             log('✅ Posted successfully!');
             return { success: true };
         } else {
             log('⚠️ Could not verify post was submitted. Check screenshots.');
-            // Return success: false so it can be retried
-            return { success: false, error: 'Could not verify post submission - button click may have failed' };
+            return { success: false, error: 'Could not verify post submission' };
         }
 
     } catch (error) {
