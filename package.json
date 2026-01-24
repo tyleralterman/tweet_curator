@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "import": "node scripts/import.js"
+    "import": "node scripts/import.js",
+    "postinstall": "npx puppeteer browsers install chrome"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
