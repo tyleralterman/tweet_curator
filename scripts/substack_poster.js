@@ -154,25 +154,70 @@ async function postToSubstack(content, mediaPath = null) {
 
         // Click Post button - try multiple approaches
         log('Looking for Post button...');
-        const postButtons = await page.$$('button');
+        await delay(1000); // Wait for UI to settle
+
+        // Take screenshot before attempting to click
+        await page.screenshot({ path: '/tmp/substack-before-post.png' });
+        log('Screenshot saved: /tmp/substack-before-post.png');
+
         let clicked = false;
-        for (const button of postButtons) {
-            const text = await page.evaluate(el => el.textContent, button);
-            if (text && text.trim() === 'Post') {
-                await button.click();
-                clicked = true;
-                break;
+
+        // Approach 1: Find button by exact text match
+        clicked = await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            for (const btn of buttons) {
+                const text = btn.textContent.trim();
+                if (text === 'Post' || text === 'Post note') {
+                    // Check if button is enabled
+                    if (!btn.disabled) {
+                        btn.click();
+                        return true;
+                    }
+                }
             }
+            return false;
+        });
+
+        if (!clicked) {
+            log('Approach 1 failed, trying Approach 2...');
+            // Approach 2: Find by aria-label or data attributes
+            clicked = await page.evaluate(() => {
+                const btn = document.querySelector('button[aria-label*="Post"], button[data-testid*="post"]');
+                if (btn && !btn.disabled) {
+                    btn.click();
+                    return true;
+                }
+                return false;
+            });
         }
 
         if (!clicked) {
-            // Try keyboard shortcut
+            log('Approach 2 failed, trying Approach 3...');
+            // Approach 3: Look for submit-type button in form
+            clicked = await page.evaluate(() => {
+                const btn = document.querySelector('form button[type="submit"], .composer button, .notes-composer button');
+                if (btn && !btn.disabled) {
+                    btn.click();
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        if (!clicked) {
+            log('Approach 3 failed, trying keyboard shortcut...');
+            // Approach 4: Keyboard shortcut
             await page.keyboard.down('Meta');
             await page.keyboard.press('Enter');
             await page.keyboard.up('Meta');
+            clicked = true;
         }
 
-        await delay(3000);
+        await delay(5000); // Wait longer for post to actually submit
+
+        // Take screenshot after to verify
+        await page.screenshot({ path: '/tmp/substack-after-post.png' });
+        log('Screenshot saved: /tmp/substack-after-post.png');
 
         log('✅ Posted successfully!');
         return { success: true };
