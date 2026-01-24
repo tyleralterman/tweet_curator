@@ -147,27 +147,67 @@ async function postToSubstack(content, mediaPath = null) {
         }
 
         log('Clicked Create button, waiting for menu...');
-        await delay(1500);
+        await delay(2000); // Wait longer for menu animation
+
+        // Take screenshot of the menu
+        await page.screenshot({ path: '/tmp/substack-create-menu.png' });
+        log('Screenshot saved: /tmp/substack-create-menu.png');
+
+        // Debug: Log all visible clickable elements to see what's in the menu
+        const menuItems = await page.evaluate(() => {
+            const items = [];
+            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *, [role="button"]');
+            elements.forEach(el => {
+                const text = el.textContent.trim();
+                if (text && text.length < 30 && el.offsetParent !== null) {
+                    items.push(text);
+                }
+            });
+            // Return unique items
+            return [...new Set(items)].slice(0, 20);
+        });
+        log(`Menu items found: ${JSON.stringify(menuItems)}`);
 
         // Step 4: Click "Note" in the menu
         log('Looking for Note option...');
         let noteClicked = await page.evaluate(() => {
-            // Look for "Note" text in the dropdown/menu
-            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *');
+            // Look for "Note" or "Notes" text in the dropdown/menu
+            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *, [role="button"], span');
             for (const el of elements) {
                 const text = el.textContent.trim().toLowerCase();
-                if (text === 'note' && el.offsetParent !== null) {
+                // Match "note", "notes", or text containing just "note"
+                if ((text === 'note' || text === 'notes' || text === 'new note') && el.offsetParent !== null) {
                     el.click();
-                    return true;
+                    return { clicked: true, text: text };
                 }
             }
-            return false;
+            return { clicked: false };
         });
 
-        if (!noteClicked) {
-            await page.screenshot({ path: '/tmp/substack-no-note.png' });
-            throw new Error('Could not find Note option in menu. Screenshot saved.');
+        if (!noteClicked.clicked) {
+            // Try clicking anything that contains "note"
+            noteClicked = await page.evaluate(() => {
+                const elements = document.querySelectorAll('*');
+                for (const el of elements) {
+                    const text = el.textContent.trim().toLowerCase();
+                    if (text.includes('note') && !text.includes('notification') && text.length < 20 && el.offsetParent !== null) {
+                        // Check if it's clickable
+                        if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.role === 'button' || el.role === 'menuitem' || el.onclick) {
+                            el.click();
+                            return { clicked: true, text: text };
+                        }
+                    }
+                }
+                return { clicked: false };
+            });
         }
+
+        if (!noteClicked.clicked) {
+            await page.screenshot({ path: '/tmp/substack-no-note.png' });
+            throw new Error(`Could not find Note option in menu. Found items: ${JSON.stringify(menuItems)}. Screenshot saved.`);
+        }
+
+        log(`Clicked Note option: "${noteClicked.text}"`);
 
         log('Clicked Note, waiting for overlay...');
         await delay(2000);
