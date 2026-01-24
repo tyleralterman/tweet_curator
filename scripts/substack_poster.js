@@ -105,8 +105,8 @@ async function postToSubstack(content, mediaPath = null) {
         // Step 2: Navigate to home feed where the Notes composer is inline
         // The home feed has a "What's on your mind?" box at the top
         log('Navigating to https://substack.com/home');
-        await page.goto('https://substack.com/home', { waitUntil: 'networkidle2' });
-        await delay(3000);
+        await page.goto('https://substack.com/home', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await delay(5000); // Extra wait for JS to render
 
         // Take screenshot for debugging
         await page.screenshot({ path: '/tmp/substack-home.png' });
