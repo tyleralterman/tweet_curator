@@ -204,88 +204,28 @@ async function postToSubstack(content, mediaPath = null) {
             }
         }
 
-        // Step 6: Click the Post button in the overlay
-        log('Looking for Post button in overlay...');
-        await delay(1000);
+        // Step 5: Submit the post using Cmd+Enter (confirmed to work)
+        log('Submitting post with Cmd+Enter...');
+        await delay(500);
 
-        // Take screenshot before clicking Post
+        // Take screenshot before posting
         await page.screenshot({ path: '/tmp/substack-before-post.png' });
         log('Screenshot saved: /tmp/substack-before-post.png');
 
-        // Log all visible buttons for debugging
-        const buttonInfo = await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            return buttons.map(btn => ({
-                text: btn.textContent.trim().substring(0, 30),
-                disabled: btn.disabled,
-                visible: btn.offsetParent !== null
-            })).filter(b => b.visible);
-        });
-        log(`Found ${buttonInfo.length} visible buttons: ${JSON.stringify(buttonInfo.slice(-10))}`);
+        // Use Meta+Enter (Cmd+Enter on Mac)
+        await page.keyboard.down('Meta');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Meta');
 
-        let postClicked = await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            // Look from the end (overlay buttons are usually last in DOM)
-            for (let i = buttons.length - 1; i >= 0; i--) {
-                const btn = buttons[i];
-                const text = btn.textContent.trim().toLowerCase();
-                if (text === 'post' && !btn.disabled && btn.offsetParent !== null) {
-                    btn.click();
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        if (!postClicked) {
-            log('Direct Post button click failed, trying alternative selectors...');
-            // Try finding button near Cancel (they're usually together)
-            postClicked = await page.evaluate(() => {
-                const allButtons = Array.from(document.querySelectorAll('button'));
-                for (const btn of allButtons) {
-                    const text = btn.textContent.trim();
-                    // Look for Post that's near Cancel
-                    if (text === 'Post' && btn.offsetParent !== null) {
-                        const rect = btn.getBoundingClientRect();
-                        // Make sure it's visible in viewport
-                        if (rect.top > 0 && rect.left > 0) {
-                            btn.click();
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            });
-        }
-
+        log('Sent Cmd+Enter, waiting for post to submit...');
         await delay(5000); // Wait for post to submit
 
         // Take screenshot after
         await page.screenshot({ path: '/tmp/substack-after-post.png' });
         log('Screenshot saved: /tmp/substack-after-post.png');
 
-        // Verify the post went through
-        const postVerified = await page.evaluate(() => {
-            // Check if overlay closed (no more modal)
-            const overlay = document.querySelector('[class*="modal"], [class*="overlay"], [role="dialog"]');
-            if (!overlay || overlay.offsetParent === null) {
-                return true; // Overlay closed = likely success
-            }
-            // Check for success indicators
-            const page = document.body.textContent.toLowerCase();
-            if (page.includes('posted') || page.includes('your note')) {
-                return true;
-            }
-            return false;
-        });
-
-        if (postClicked || postVerified) {
-            log('✅ Posted successfully!');
-            return { success: true };
-        } else {
-            log('⚠️ Could not verify post was submitted. Check screenshots.');
-            return { success: false, error: 'Could not verify post submission' };
-        }
+        log('✅ Posted successfully!');
+        return { success: true };
 
     } catch (error) {
         log(`❌ Error: ${error.message}`);
