@@ -1674,14 +1674,27 @@ app.listen(PORT, () => {
     if (cron && process.env.RENDER && process.env.SUBSTACK_EMAIL) {
         console.log('📅 Setting up Substack posting schedule...');
 
-        // Helper to run the poster
+        // Helper to run the poster (installs Chrome first to ensure it's available)
         const runPoster = () => {
-            console.log('📫 Running Substack poster...');
-            const poster = spawn('node', [path.join(__dirname, 'scripts/substack_poster.js')], {
+            console.log('📫 Installing Chrome and running Substack poster...');
+            // Install Chrome first, then run poster
+            const install = spawn('npx', ['puppeteer', 'browsers', 'install', 'chrome'], {
                 stdio: 'inherit',
                 env: process.env
             });
-            poster.on('error', (err) => console.error('Poster error:', err));
+            install.on('close', (code) => {
+                if (code === 0) {
+                    console.log('📫 Chrome ready, running poster...');
+                    const poster = spawn('node', [path.join(__dirname, 'scripts/substack_poster.js')], {
+                        stdio: 'inherit',
+                        env: process.env
+                    });
+                    poster.on('error', (err) => console.error('Poster error:', err));
+                } else {
+                    console.error('Chrome install failed with code:', code);
+                }
+            });
+            install.on('error', (err) => console.error('Chrome install error:', err));
         };
 
         // Schedule: 9:00 AM, 1:00 PM, 8:30 PM CST (UTC-6)
