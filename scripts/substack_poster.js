@@ -160,57 +160,115 @@ async function postToSubstack(content, mediaPath = null) {
         await page.screenshot({ path: '/tmp/substack-before-post.png' });
         log('Screenshot saved: /tmp/substack-before-post.png');
 
+        // First, log all buttons we can see for debugging
+        const buttonInfo = await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            return buttons.map(btn => ({
+                text: btn.textContent.trim().substring(0, 30),
+                disabled: btn.disabled,
+                className: btn.className.substring(0, 50),
+                visible: btn.offsetParent !== null
+            })).filter(b => b.visible);
+        });
+        log(`Found ${buttonInfo.length} visible buttons: ${JSON.stringify(buttonInfo.slice(0, 5))}`);
+
         let clicked = false;
 
-        // Approach 1: Find button by exact text match
+        // Approach 1: Find button containing "Post" text (case-insensitive, partial match)
         clicked = await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
             for (const btn of buttons) {
-                const text = btn.textContent.trim();
-                if (text === 'Post' || text === 'Post note') {
-                    // Check if button is enabled
-                    if (!btn.disabled) {
-                        btn.click();
-                        return true;
-                    }
+                const text = btn.textContent.trim().toLowerCase();
+                // Match "Post" but not "Posted" or "Repost"
+                if ((text === 'post' || text === 'post note' || text.match(/^post$/i)) && !btn.disabled) {
+                    console.log('Found Post button:', text);
+                    btn.click();
+                    return true;
                 }
             }
             return false;
         });
 
         if (!clicked) {
-            log('Approach 1 failed, trying Approach 2...');
-            // Approach 2: Find by aria-label or data attributes
+            log('Approach 1 failed, trying Approach 2 (dialog/modal Post button)...');
+            // Approach 2: Look for Post button in a dialog/modal context (like the dropdown shown in screenshot)
             clicked = await page.evaluate(() => {
-                const btn = document.querySelector('button[aria-label*="Post"], button[data-testid*="post"]');
-                if (btn && !btn.disabled) {
-                    btn.click();
-                    return true;
+                // Look in modal, dialog, dropdown contexts
+                const selectors = [
+                    'div[role="dialog"] button',
+                    'div[role="menu"] button',
+                    '.modal button',
+                    '[class*="modal"] button',
+                    '[class*="dialog"] button',
+                    '[class*="dropdown"] button'
+                ];
+                for (const selector of selectors) {
+                    const buttons = document.querySelectorAll(selector);
+                    for (const btn of buttons) {
+                        const text = btn.textContent.trim().toLowerCase();
+                        if (text === 'post' && !btn.disabled && btn.offsetParent !== null) {
+                            btn.click();
+                            return true;
+                        }
+                    }
                 }
                 return false;
             });
         }
 
         if (!clicked) {
-            log('Approach 2 failed, trying Approach 3...');
-            // Approach 3: Look for submit-type button in form
+            log('Approach 2 failed, trying Approach 3 (XPath text search)...');
+            // Approach 3: Use XPath to find button with exact "Post" text
+            try {
+                const postButtons = await page.$x("//button[normalize-space(text())='Post']");
+                if (postButtons.length > 0) {
+                    for (const btn of postButtons) {
+                        const isDisabled = await page.evaluate(el => el.disabled, btn);
+                        const isVisible = await page.evaluate(el => el.offsetParent !== null, btn);
+                        if (!isDisabled && isVisible) {
+                            await btn.click();
+                            clicked = true;
+                            log('Clicked Post button via XPath');
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                log(`XPath approach error: ${e.message}`);
+            }
+        }
+
+        if (!clicked) {
+            log('Approach 3 failed, trying Approach 4 (coordinate click)...');
+            // Approach 4: Look for and click the Post button by finding it near the composer
+            // The screenshot shows a "Post" button in a popover/dropdown
             clicked = await page.evaluate(() => {
-                const btn = document.querySelector('form button[type="submit"], .composer button, .notes-composer button');
-                if (btn && !btn.disabled) {
-                    btn.click();
-                    return true;
+                const allElements = document.querySelectorAll('*');
+                for (const el of allElements) {
+                    if (el.tagName === 'BUTTON' || el.role === 'button') {
+                        const text = el.textContent.trim();
+                        if (text === 'Post' && el.offsetParent !== null) {
+                            el.click();
+                            return true;
+                        }
+                    }
                 }
                 return false;
             });
         }
 
         if (!clicked) {
-            log('Approach 3 failed, trying keyboard shortcut...');
-            // Approach 4: Keyboard shortcut
+            log('Approach 4 failed, trying Ctrl+Enter keyboard shortcut...');
+            // Approach 5: Try Ctrl+Enter (works on some platforms)
+            await page.keyboard.down('Control');
+            await page.keyboard.press('Enter');
+            await page.keyboard.up('Control');
+            await delay(1000);
+
+            // Also try Meta+Enter for Mac
             await page.keyboard.down('Meta');
             await page.keyboard.press('Enter');
             await page.keyboard.up('Meta');
-            clicked = true;
         }
 
         await delay(5000); // Wait longer for post to actually submit
@@ -219,8 +277,31 @@ async function postToSubstack(content, mediaPath = null) {
         await page.screenshot({ path: '/tmp/substack-after-post.png' });
         log('Screenshot saved: /tmp/substack-after-post.png');
 
-        log('✅ Posted successfully!');
-        return { success: true };
+        // Verify the post actually went through by checking for success indicators
+        const postVerified = await page.evaluate(() => {
+            // Check if composer is now empty (post was submitted)
+            const composer = document.querySelector('.ProseMirror, [contenteditable="true"]');
+            if (composer && composer.textContent.trim() === '') {
+                return true;
+            }
+            // Check for success toast/notification
+            const successIndicators = document.querySelectorAll('[class*="success"], [class*="toast"], [role="alert"]');
+            for (const el of successIndicators) {
+                if (el.textContent.toLowerCase().includes('posted') || el.textContent.toLowerCase().includes('success')) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (clicked || postVerified) {
+            log('✅ Posted successfully!');
+            return { success: true };
+        } else {
+            log('⚠️ Could not verify post was submitted. Check screenshots.');
+            // Return success: false so it can be retried
+            return { success: false, error: 'Could not verify post submission - button click may have failed' };
+        }
 
     } catch (error) {
         log(`❌ Error: ${error.message}`);
