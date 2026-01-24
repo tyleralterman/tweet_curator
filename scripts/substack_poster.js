@@ -102,122 +102,66 @@ async function postToSubstack(content, mediaPath = null) {
         log('Logged in successfully');
         await delay(2000);
 
-        // Step 2: Navigate to profile page where Create button is
-        const profileUrl = `https://substack.com/@${SUBSTACK_PUBLICATION}`;
-        log(`Navigating to ${profileUrl}`);
-        await page.goto(profileUrl, { waitUntil: 'networkidle2' });
-        await delay(2000);
+        // Step 2: Navigate to home feed where the Notes composer is inline
+        // The home feed has a "What's on your mind?" box at the top
+        log('Navigating to https://substack.com/home');
+        await page.goto('https://substack.com/home', { waitUntil: 'networkidle2' });
+        await delay(3000);
 
         // Take screenshot for debugging
-        await page.screenshot({ path: '/tmp/substack-profile.png' });
-        log('Screenshot saved: /tmp/substack-profile.png');
+        await page.screenshot({ path: '/tmp/substack-home.png' });
+        log('Screenshot saved: /tmp/substack-home.png');
 
-        // Step 3: Click the "Create" button
-        log('Looking for Create button...');
-        let createClicked = await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            for (const btn of buttons) {
-                const text = btn.textContent.trim().toLowerCase();
-                if (text === 'create' && btn.offsetParent !== null) {
-                    btn.click();
-                    return true;
-                }
-            }
-            return false;
-        });
+        // Step 3: Click on the composer area to open it
+        // Look for "What's on your mind?" placeholder or similar composer trigger
+        log('Looking for composer trigger...');
 
-        if (!createClicked) {
-            // Try looking for Create in dropdown or sidebar
-            createClicked = await page.evaluate(() => {
-                const elements = document.querySelectorAll('[class*="create"], [aria-label*="Create"], button, a');
-                for (const el of elements) {
-                    const text = el.textContent.trim().toLowerCase();
-                    if (text === 'create' && el.offsetParent !== null) {
-                        el.click();
-                        return true;
-                    }
-                }
-                return false;
-            });
-        }
+        let composerOpened = await page.evaluate(() => {
+            // Try clicking on various composer triggers
+            const selectors = [
+                '[placeholder*="mind"]',
+                '[data-testid="notes-composer"]',
+                '[contenteditable="true"]',
+                '.ProseMirror',
+                'div[role="textbox"]'
+            ];
 
-        if (!createClicked) {
-            await page.screenshot({ path: '/tmp/substack-no-create.png' });
-            throw new Error('Could not find Create button. Screenshot saved.');
-        }
-
-        log('Clicked Create button, waiting for menu...');
-        await delay(2000); // Wait longer for menu animation
-
-        // Take screenshot of the menu
-        await page.screenshot({ path: '/tmp/substack-create-menu.png' });
-        log('Screenshot saved: /tmp/substack-create-menu.png');
-
-        // Debug: Log all visible clickable elements to see what's in the menu
-        const menuItems = await page.evaluate(() => {
-            const items = [];
-            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *, [role="button"]');
-            elements.forEach(el => {
-                const text = el.textContent.trim();
-                if (text && text.length < 30 && el.offsetParent !== null) {
-                    items.push(text);
-                }
-            });
-            // Return unique items
-            return [...new Set(items)].slice(0, 20);
-        });
-        log(`Menu items found: ${JSON.stringify(menuItems)}`);
-
-        // Step 4: Click "Note" in the menu
-        log('Looking for Note option...');
-        let noteClicked = await page.evaluate(() => {
-            // Look for "Note" or "Notes" text in the dropdown/menu
-            const elements = document.querySelectorAll('button, a, div[role="menuitem"], [class*="menu"] *, [class*="dropdown"] *, [role="button"], span');
-            for (const el of elements) {
-                const text = el.textContent.trim().toLowerCase();
-                // Match "note", "notes", or text containing just "note"
-                if ((text === 'note' || text === 'notes' || text === 'new note') && el.offsetParent !== null) {
+            for (const selector of selectors) {
+                const el = document.querySelector(selector);
+                if (el && el.offsetParent !== null) {
                     el.click();
-                    return { clicked: true, text: text };
+                    return { found: true, selector: selector };
                 }
             }
-            return { clicked: false };
+
+            // Try finding any clickable area that looks like a composer
+            const divs = document.querySelectorAll('div');
+            for (const div of divs) {
+                const text = div.textContent.trim().toLowerCase();
+                if (text.includes("what's on your mind") || text.includes('write a note')) {
+                    div.click();
+                    return { found: true, selector: 'text-match' };
+                }
+            }
+
+            return { found: false };
         });
 
-        if (!noteClicked.clicked) {
-            // Try clicking anything that contains "note"
-            noteClicked = await page.evaluate(() => {
-                const elements = document.querySelectorAll('*');
-                for (const el of elements) {
-                    const text = el.textContent.trim().toLowerCase();
-                    if (text.includes('note') && !text.includes('notification') && text.length < 20 && el.offsetParent !== null) {
-                        // Check if it's clickable
-                        if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.role === 'button' || el.role === 'menuitem' || el.onclick) {
-                            el.click();
-                            return { clicked: true, text: text };
-                        }
-                    }
-                }
-                return { clicked: false };
-            });
+        if (!composerOpened.found) {
+            // Maybe the composer is already visible, let's just look for contenteditable
+            log('Direct composer not found, looking for any editable area...');
+        } else {
+            log(`Clicked on composer trigger: ${composerOpened.selector}`);
         }
 
-        if (!noteClicked.clicked) {
-            await page.screenshot({ path: '/tmp/substack-no-note.png' });
-            throw new Error(`Could not find Note option in menu. Found items: ${JSON.stringify(menuItems)}. Screenshot saved.`);
-        }
-
-        log(`Clicked Note option: "${noteClicked.text}"`);
-
-        log('Clicked Note, waiting for overlay...');
         await delay(2000);
 
-        // Take screenshot of the overlay
-        await page.screenshot({ path: '/tmp/substack-note-overlay.png' });
-        log('Screenshot saved: /tmp/substack-note-overlay.png');
+        // Take screenshot after clicking
+        await page.screenshot({ path: '/tmp/substack-composer-opened.png' });
+        log('Screenshot saved: /tmp/substack-composer-opened.png');
 
-        // Step 5: Find the composer in the overlay and type content
-        log('Looking for composer in overlay...');
+        // Step 4: Find the actual composer and type content
+        log('Looking for composer to type in...');
         const composerSelectors = [
             '[contenteditable="true"]',
             '.ProseMirror',
@@ -229,17 +173,17 @@ async function postToSubstack(content, mediaPath = null) {
         let composer = null;
         for (const selector of composerSelectors) {
             const elements = await page.$$(selector);
-            // Get the last one (overlay composer is usually added after page composer)
             if (elements.length > 0) {
+                // Use the last one (usually the active/focused one)
                 composer = elements[elements.length - 1];
-                log(`Found composer with selector: ${selector} (${elements.length} matches, using last)`);
+                log(`Found composer with selector: ${selector} (${elements.length} matches)`);
                 break;
             }
         }
 
         if (!composer) {
             await page.screenshot({ path: '/tmp/substack-no-composer.png' });
-            throw new Error('Could not find composer in overlay. Screenshot saved.');
+            throw new Error('Could not find composer. Screenshot saved.');
         }
 
         // Click to focus the composer
