@@ -1384,8 +1384,13 @@ body::before {
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }
 
 .batch-info {
@@ -1417,6 +1422,23 @@ body::before {
     background: var(--danger);
     border-color: var(--danger);
     color: var(--cream);
+}
+
+.batch-select-all {
+    padding: 6px 12px;
+    background: var(--amber);
+    border: 1px solid var(--amber);
+    border-radius: var(--radius-sm);
+    color: var(--bg-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.batch-select-all:hover {
+    background: var(--amber-light);
+    border-color: var(--amber-light);
 }
 
 .batch-actions {
@@ -1517,11 +1539,11 @@ body::before {
         flex-direction: column;
         padding: 12px 16px;
     }
-    
+
     .batch-tag-input {
         flex-wrap: wrap;
     }
-    
+
     .batch-tag-input input {
         width: 100%;
     }

@@ -1288,13 +1288,29 @@ async function batchRemoveTag() {
     }
 }
 
+function selectAllTweets() {
+    // Select all tweets currently in the view
+    state.tweets.forEach(tweet => {
+        state.selectedTweets.add(tweet.id);
+    });
+
+    // Update all card visuals
+    document.querySelectorAll('.tweet-card').forEach(card => {
+        card.classList.add('selected');
+    });
+
+    updateBatchBar();
+}
+
 function setupBatchHandlers() {
     const clearBtn = document.getElementById('clearSelection');
+    const selectAllBtn = document.getElementById('selectAll');
     const addBtn = document.getElementById('batchAddTag');
     const removeBtn = document.getElementById('batchRemoveTag');
     const input = document.getElementById('batchTagInput');
 
     if (clearBtn) clearBtn.addEventListener('click', clearBatchSelection);
+    if (selectAllBtn) selectAllBtn.addEventListener('click', selectAllTweets);
     if (addBtn) addBtn.addEventListener('click', batchAddTag);
     if (removeBtn) removeBtn.addEventListener('click', batchRemoveTag);
 
