@@ -1227,9 +1227,8 @@ async function batchAddTag() {
             btn.textContent = `✓ Added to ${result.added}`;
             setTimeout(() => btn.textContent = originalText, 2000);
 
-            // Clear input and refresh
+            // Clear input and refresh (keep selection)
             tagInput.value = '';
-            clearBatchSelection();
             fetchTweets();
             fetchTags();
         } else {
@@ -1274,9 +1273,8 @@ async function batchRemoveTag() {
             btn.textContent = `✓ Removed from ${result.removed}`;
             setTimeout(() => btn.textContent = originalText, 2000);
 
-            // Clear input and refresh
+            // Clear input and refresh (keep selection)
             tagInput.value = '';
-            clearBatchSelection();
             fetchTweets();
             fetchTags();
         } else {
