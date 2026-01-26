@@ -765,6 +765,67 @@ app.delete('/api/tweets/:id/tags/:tagName', (req, res) => {
     }
 });
 
+// Batch add tag to multiple tweets
+app.post('/api/batch/tags', (req, res) => {
+    try {
+        const { tweetIds, tagName, tagCategory = 'custom' } = req.body;
+
+        if (!tweetIds || !Array.isArray(tweetIds) || tweetIds.length === 0) {
+            return res.status(400).json({ error: 'tweetIds array required' });
+        }
+        if (!tagName) {
+            return res.status(400).json({ error: 'tagName required' });
+        }
+
+        // Create or get tag
+        db.prepare(`INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)`)
+            .run(tagName.toLowerCase(), tagCategory);
+
+        const tag = db.prepare(`SELECT id FROM tags WHERE name = ?`).get(tagName.toLowerCase());
+
+        // Add tag to each tweet
+        const insertStmt = db.prepare(`INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, 'manual')`);
+        let added = 0;
+
+        for (const tweetId of tweetIds) {
+            const result = insertStmt.run(tweetId, tag.id);
+            if (result.changes > 0) added++;
+        }
+
+        res.json({ success: true, added, total: tweetIds.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Batch remove tag from multiple tweets
+app.delete('/api/batch/tags', (req, res) => {
+    try {
+        const { tweetIds, tagName } = req.body;
+
+        if (!tweetIds || !Array.isArray(tweetIds) || tweetIds.length === 0) {
+            return res.status(400).json({ error: 'tweetIds array required' });
+        }
+        if (!tagName) {
+            return res.status(400).json({ error: 'tagName required' });
+        }
+
+        const tag = db.prepare(`SELECT id FROM tags WHERE name = ?`).get(tagName.toLowerCase());
+        if (!tag) {
+            return res.status(404).json({ error: 'Tag not found' });
+        }
+
+        // Remove tag from each tweet
+        const placeholders = tweetIds.map(() => '?').join(',');
+        const result = db.prepare(`DELETE FROM tweet_tags WHERE tag_id = ? AND tweet_id IN (${placeholders})`)
+            .run(tag.id, ...tweetIds);
+
+        res.json({ success: true, removed: result.changes, total: tweetIds.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get stats
 app.get('/api/stats', (req, res) => {
     try {

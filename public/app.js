@@ -21,7 +21,8 @@ let state = {
         excludeThreads: false // Changed to false - show thread starters
     },
     sort: { by: 'created_at', order: 'desc' },
-    selectedTweet: null
+    selectedTweet: null,
+    selectedTweets: new Set() // For batch selection
 };
 
 // DOM Elements
@@ -337,7 +338,8 @@ function renderTweets() {
         }
 
         return `
-            <div class="tweet-card ${swipeClass}" data-id="${tweet.id}">
+            <div class="tweet-card ${swipeClass} ${state.selectedTweets.has(tweet.id) ? 'selected' : ''}" data-id="${tweet.id}">
+                <span class="select-checkbox" data-id="${tweet.id}">✓</span>
                 <div class="tweet-header">
                     <div class="tweet-badges">
                         ${swipeBadge ? `<span class="swipe-badge">${swipeBadge}</span>` : ''}
@@ -362,9 +364,18 @@ function renderTweets() {
         `;
     }).join('');
 
-    // Add click handlers
+    // Add click handlers for cards (open modal) and checkboxes (selection)
     document.querySelectorAll('.tweet-card').forEach(card => {
-        card.addEventListener('click', () => openTweetModal(card.dataset.id));
+        card.addEventListener('click', (e) => {
+            // If clicking the checkbox, toggle selection
+            if (e.target.classList.contains('select-checkbox')) {
+                e.stopPropagation();
+                toggleTweetSelection(card.dataset.id);
+                return;
+            }
+            // Otherwise open the modal
+            openTweetModal(card.dataset.id);
+        });
     });
 
     // Lazy load quoted tweets
@@ -1143,6 +1154,159 @@ function setupAiSearchHandlers() {
 }
 
 // ============================================
+// Batch Selection Functions
+// ============================================
+
+function toggleTweetSelection(tweetId) {
+    if (state.selectedTweets.has(tweetId)) {
+        state.selectedTweets.delete(tweetId);
+    } else {
+        state.selectedTweets.add(tweetId);
+    }
+
+    // Update the card's visual state
+    const card = document.querySelector(`.tweet-card[data-id="${tweetId}"]`);
+    if (card) {
+        card.classList.toggle('selected', state.selectedTweets.has(tweetId));
+    }
+
+    updateBatchBar();
+}
+
+function updateBatchBar() {
+    const batchBar = document.getElementById('batchBar');
+    const selectedCount = document.getElementById('selectedCount');
+
+    if (state.selectedTweets.size > 0) {
+        batchBar.style.display = 'flex';
+        selectedCount.textContent = state.selectedTweets.size;
+    } else {
+        batchBar.style.display = 'none';
+    }
+}
+
+function clearBatchSelection() {
+    state.selectedTweets.clear();
+    document.querySelectorAll('.tweet-card.selected').forEach(card => {
+        card.classList.remove('selected');
+    });
+    updateBatchBar();
+}
+
+async function batchAddTag() {
+    const tagInput = document.getElementById('batchTagInput');
+    const tagName = tagInput.value.trim().toLowerCase();
+
+    if (!tagName) {
+        alert('Please enter a tag name');
+        return;
+    }
+
+    if (state.selectedTweets.size === 0) {
+        alert('No tweets selected');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/batch/tags', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tweetIds: Array.from(state.selectedTweets),
+                tagName: tagName,
+                tagCategory: 'custom'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Show success message
+            const btn = document.getElementById('batchAddTag');
+            const originalText = btn.textContent;
+            btn.textContent = `✓ Added to ${result.added}`;
+            setTimeout(() => btn.textContent = originalText, 2000);
+
+            // Clear input and refresh
+            tagInput.value = '';
+            clearBatchSelection();
+            fetchTweets();
+            fetchTags();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Batch add tag error:', err);
+        alert('Error adding tag');
+    }
+}
+
+async function batchRemoveTag() {
+    const tagInput = document.getElementById('batchTagInput');
+    const tagName = tagInput.value.trim().toLowerCase();
+
+    if (!tagName) {
+        alert('Please enter a tag name to remove');
+        return;
+    }
+
+    if (state.selectedTweets.size === 0) {
+        alert('No tweets selected');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/batch/tags', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tweetIds: Array.from(state.selectedTweets),
+                tagName: tagName
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Show success message
+            const btn = document.getElementById('batchRemoveTag');
+            const originalText = btn.textContent;
+            btn.textContent = `✓ Removed from ${result.removed}`;
+            setTimeout(() => btn.textContent = originalText, 2000);
+
+            // Clear input and refresh
+            tagInput.value = '';
+            clearBatchSelection();
+            fetchTweets();
+            fetchTags();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Batch remove tag error:', err);
+        alert('Error removing tag');
+    }
+}
+
+function setupBatchHandlers() {
+    const clearBtn = document.getElementById('clearSelection');
+    const addBtn = document.getElementById('batchAddTag');
+    const removeBtn = document.getElementById('batchRemoveTag');
+    const input = document.getElementById('batchTagInput');
+
+    if (clearBtn) clearBtn.addEventListener('click', clearBatchSelection);
+    if (addBtn) addBtn.addEventListener('click', batchAddTag);
+    if (removeBtn) removeBtn.addEventListener('click', batchRemoveTag);
+
+    // Enter key in input triggers add
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') batchAddTag();
+        });
+    }
+}
+
+// ============================================
 // Initialize
 // ============================================
 
@@ -1151,6 +1315,7 @@ async function init() {
 
     setupEventHandlers();
     setupAiSearchHandlers();
+    setupBatchHandlers();
 
     // Load data
     await Promise.all([

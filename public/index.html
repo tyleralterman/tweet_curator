@@ -200,6 +200,21 @@
         </main>
     </div>
 
+    <!-- Batch Actions Bar (appears when tweets selected) -->
+    <div id="batchBar" class="batch-bar" style="display: none;">
+        <div class="batch-info">
+            <span id="selectedCount">0</span> selected
+            <button id="clearSelection" class="batch-clear">✕ Clear</button>
+        </div>
+        <div class="batch-actions">
+            <div class="batch-tag-input">
+                <input type="text" id="batchTagInput" placeholder="Tag name...">
+                <button id="batchAddTag" class="batch-btn add">+ Add Tag</button>
+                <button id="batchRemoveTag" class="batch-btn remove">- Remove Tag</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Tweet Detail Modal -->
     <div id="tweetModal" class="modal">
         <div class="modal-content">

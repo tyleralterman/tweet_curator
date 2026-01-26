@@ -1361,3 +1361,168 @@ body::before {
     font-size: 0.8rem;
     font-style: italic;
 }
+
+/* ============================================
+   Batch Actions Bar
+   ============================================ */
+
+.batch-bar {
+    position: fixed;
+    bottom: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+    border-top: 2px solid var(--amber);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.batch-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.batch-info #selectedCount {
+    font-weight: 700;
+    color: var(--amber);
+    font-size: 1.2rem;
+}
+
+.batch-clear {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.batch-clear:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: var(--cream);
+}
+
+.batch-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.batch-tag-input {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.batch-tag-input input {
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    width: 200px;
+}
+
+.batch-tag-input input:focus {
+    outline: none;
+    border-color: var(--amber);
+}
+
+.batch-btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.batch-btn.add {
+    background: var(--forest);
+    color: var(--cream);
+}
+
+.batch-btn.add:hover {
+    background: var(--sage);
+}
+
+.batch-btn.remove {
+    background: var(--burgundy);
+    color: var(--cream);
+}
+
+.batch-btn.remove:hover {
+    background: var(--burgundy-light);
+}
+
+/* Tweet card selection state */
+.tweet-card.selected {
+    border-color: var(--amber) !important;
+    box-shadow: 0 0 0 2px var(--amber), 0 4px 12px rgba(201, 162, 39, 0.3);
+}
+
+.tweet-card .select-checkbox {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: transparent;
+    transition: all 0.15s;
+    z-index: 5;
+}
+
+.tweet-card .select-checkbox:hover {
+    border-color: var(--amber);
+    background: var(--bg-tertiary);
+}
+
+.tweet-card.selected .select-checkbox {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--bg-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .batch-bar {
+        left: 0;
+        flex-direction: column;
+        padding: 12px 16px;
+    }
+    
+    .batch-tag-input {
+        flex-wrap: wrap;
+    }
+    
+    .batch-tag-input input {
+        width: 100%;
+    }
+}
