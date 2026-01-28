@@ -53,15 +53,17 @@ const db = new Database(DB_PATH);
 // ============================================
 
 // Find tweets with media that haven't been downloaded yet
-// (media_url is a t.co link or pbs.twimg.com URL, not a local path)
+// Include liked/superliked AND manual-media tagged tweets
 let query = `
-    SELECT t.id, t.media_url, t.full_text
+    SELECT DISTINCT t.id, t.media_url, t.full_text
     FROM tweets t
+    LEFT JOIN tweet_tags tt ON t.id = tt.tweet_id
+    LEFT JOIN tags tg ON tt.tag_id = tg.id
     WHERE t.media_url IS NOT NULL
     AND t.media_url LIKE 'http%'
     AND t.media_url NOT LIKE '%/media/downloaded/%'
     AND t.media_url NOT LIKE '%/quote_screenshots/%'
-    AND (t.swipe_status = 'like' OR t.swipe_status = 'superlike')
+    AND (t.swipe_status IN ('like', 'superlike') OR tg.name = 'manual-media')
 `;
 
 if (limit) {
