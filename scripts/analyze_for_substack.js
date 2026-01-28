@@ -67,7 +67,16 @@ function detectIssues(tweet) {
     // Manual-post checks
     if (tweet.tweet_type === 'retweet') issues.push({ type: 'manual', reason: 'retweet' });
     if (tweet.tweet_type === 'thread') issues.push({ type: 'manual', reason: 'thread' });
-    if (tweet.media_url) issues.push({ type: 'manual', reason: 'has-media' });
+    if (tweet.media_url) {
+        // Check if text stands alone (>50 chars without just a t.co link)
+        const textWithoutLinks = text.replace(/https?:\/\/t\.co\/\w+/g, '').trim();
+        if (textWithoutLinks.length < 50) {
+            issues.push({ type: 'manual', reason: 'has-media' });
+        } else {
+            // Media with good text can be posted - just flag for review
+            issues.push({ type: 'review', reason: 'has-media' });
+        }
+    }
     if (tweet.quoted_tweet_id) issues.push({ type: 'manual', reason: 'quote-tweet' });
     if (text.endsWith('…')) issues.push({ type: 'manual', reason: 'truncated' });
 
