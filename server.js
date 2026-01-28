@@ -167,6 +167,55 @@ try {
     }
     if (superlikeAdded > 0) console.log(`✅ Added "auto-superlike" tag to ${superlikeAdded} tweets`);
 
+    // ============================================
+    // Process substack-manual tweets into subcategories
+    // ============================================
+    console.log('🔧 Processing substack-manual subcategories...');
+
+    const mediaTagId = ensureTag('manual-media', 'use');
+    const selfQuoteTagId = ensureTag('manual-quote-self', 'use');
+    const extQuoteTagId = ensureTag('manual-quote-external', 'use');
+    const threadTagId = ensureTag('manual-thread', 'use');
+
+    // Get substack-manual tag ID
+    const manualTag = db.prepare('SELECT id FROM tags WHERE name = ?').get('substack-manual');
+
+    if (manualTag) {
+        const manualTweets = db.prepare(`
+            SELECT DISTINCT t.id, t.media_url, t.tweet_type, t.quoted_tweet_id
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            WHERE tt.tag_id = ?
+        `).all(manualTag.id);
+
+        let mediaAdded = 0, threadAdded = 0, selfQuoteAdded = 0, extQuoteAdded = 0;
+
+        for (const tweet of manualTweets) {
+            // Has media
+            if (tweet.media_url) {
+                if (insertTag.run(tweet.id, mediaTagId, 'ai').changes > 0) mediaAdded++;
+            }
+            // Is thread
+            if (tweet.tweet_type === 'thread') {
+                if (insertTag.run(tweet.id, threadTagId, 'ai').changes > 0) threadAdded++;
+            }
+            // Quote tweet
+            if (tweet.quoted_tweet_id) {
+                const quotedExists = db.prepare('SELECT 1 FROM tweets WHERE id = ?').get(tweet.quoted_tweet_id);
+                if (quotedExists) {
+                    if (insertTag.run(tweet.id, selfQuoteTagId, 'ai').changes > 0) selfQuoteAdded++;
+                } else {
+                    if (insertTag.run(tweet.id, extQuoteTagId, 'ai').changes > 0) extQuoteAdded++;
+                }
+            }
+        }
+
+        if (mediaAdded > 0) console.log(`   ✅ Added "manual-media" to ${mediaAdded} tweets`);
+        if (threadAdded > 0) console.log(`   ✅ Added "manual-thread" to ${threadAdded} tweets`);
+        if (selfQuoteAdded > 0) console.log(`   ✅ Added "manual-quote-self" to ${selfQuoteAdded} tweets`);
+        if (extQuoteAdded > 0) console.log(`   ✅ Added "manual-quote-external" to ${extQuoteAdded} tweets`);
+    }
+
 } catch (e) {
     console.log('Note: auto-tagging:', e.message);
 }
