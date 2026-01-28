@@ -118,8 +118,26 @@ try {
         db.prepare('ALTER TABLE tweets ADD COLUMN first_impressions TEXT').run();
         console.log('✅ first_impressions column added');
     }
+    if (!columns.includes('combined_text')) {
+        console.log('🔄 Adding combined_text column to tweets table...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN combined_text TEXT').run();
+        console.log('✅ combined_text column added');
+    }
 } catch (e) {
-    console.log('Note: first_impressions migration:', e.message);
+    console.log('Note: column migration:', e.message);
+}
+
+// Run combine_threads.js if combined_text isn't populated yet
+try {
+    const combineThreadsScript = path.join(__dirname, 'scripts', 'combine_threads.js');
+    const hasCombinedText = db.prepare('SELECT COUNT(*) as cnt FROM tweets WHERE combined_text IS NOT NULL').get();
+    if (hasCombinedText.cnt === 0 && fs.existsSync(combineThreadsScript)) {
+        console.log('🧵 Running combine_threads.js to populate thread text...');
+        execSync(`node "${combineThreadsScript}"`, { encoding: 'utf8', timeout: 120000 });
+        console.log('✅ Thread text combined');
+    }
+} catch (e) {
+    console.log('Note: combine_threads:', e.message);
 }
 
 // ============================================
