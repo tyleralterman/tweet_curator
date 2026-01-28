@@ -74,10 +74,9 @@ for (const starter of threadStarters) {
         /https?:\/\/t\.co\/\w+/.test(combinedText) ||
         combinedText.includes('…');
 
-    // Save combined text
-    const notePrefix = hasIssues ? '[THREAD - NEEDS REVIEW]' : '[THREAD - CLEAN]';
-    db.prepare('UPDATE tweets SET notes = ? WHERE id = ?').run(
-        `${notePrefix}\n\n${combinedText}`,
+    // Save combined text to dedicated column (not notes)
+    db.prepare('UPDATE tweets SET combined_text = ? WHERE id = ?').run(
+        combinedText,
         starter.id
     );
 

@@ -643,6 +643,17 @@ async function openTweetModal(tweetId) {
             <button id="saveFirstImpressions" class="save-notes-btn">Save</button>
         </div>
         
+        ${tweet.combined_text ? `
+        <div class="modal-section">
+            <h4>Combined Thread Text</h4>
+            <textarea class="notes-textarea" readonly 
+                      rows="6" style="background: #1a1a1a; cursor: pointer;"
+                      onclick="navigator.clipboard.writeText(this.value); this.style.outline='2px solid #27ae60'; setTimeout(() => this.style.outline='', 1000)"
+                      title="Click to copy">${tweet.combined_text}</textarea>
+            <small style="color: #666;">Click to copy</small>
+        </div>
+        ` : ''}
+        
         <div class="modal-section">
             <h4>Notes</h4>
             <textarea id="notesInput" class="notes-textarea" 

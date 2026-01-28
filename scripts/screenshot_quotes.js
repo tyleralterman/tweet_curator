@@ -82,22 +82,22 @@ if (quoteTweets.length === 0) {
 
 async function screenshotQuotedTweet(browser, tweetUrl) {
     const page = await browser.newPage();
-    await page.setViewport({ width: 600, height: 800 });
+    await page.setViewport({ width: 550, height: 1000 });
 
     try {
-        // Navigate to the tweet
+        // Navigate directly to the quoted tweet
         await page.goto(tweetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
         // Wait for tweet content to load
         await page.waitForSelector('article', { timeout: 10000 });
 
-        // Find the tweet article and screenshot it
-        const tweetElement = await page.$('article');
-        if (!tweetElement) {
+        // Screenshot the main tweet article
+        const article = await page.$('article');
+        if (!article) {
             throw new Error('Could not find tweet article');
         }
 
-        const screenshot = await tweetElement.screenshot({ type: 'png' });
+        const screenshot = await article.screenshot({ type: 'png' });
         await page.close();
         return screenshot;
     } catch (error) {
@@ -136,16 +136,19 @@ async function main() {
     for (const tweet of quoteTweets) {
         console.log(`\n📸 Processing: ${tweet.id}`);
 
-        // Use original tweet URL (contains the quote)
-        if (!tweet.tweet_url) {
-            console.log('   ⏭️  Skipped - no tweet URL');
+        // Construct the quoted tweet's URL from its ID
+        if (!tweet.quoted_tweet_id) {
+            console.log('   ⏭️  Skipped - no quoted tweet ID');
             stats.skipped++;
             continue;
         }
 
+        // Use X's direct status URL for the QUOTED tweet (not your tweet)
+        const quotedTweetUrl = `https://x.com/i/web/status/${tweet.quoted_tweet_id}`;
+
         try {
-            // Take screenshot of the original tweet (which contains the quote card)
-            const screenshot = await screenshotQuotedTweet(browser, tweet.tweet_url);
+            // Take screenshot of the quoted tweet directly
+            const screenshot = await screenshotQuotedTweet(browser, quotedTweetUrl);
 
             // Save screenshot
             const screenshotPath = path.join(MEDIA_DIR, `${tweet.id}.png`);
