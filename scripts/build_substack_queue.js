@@ -35,6 +35,7 @@ if (fs.existsSync(schemaPath)) {
 const POSTS_PER_DAY = 3;
 const POST_TIMES = ['09:00', '13:00', '20:30']; // 9am, 1pm, 8:30pm
 const TIMEZONE = 'America/Chicago'; // CST
+const START_DATE = process.env.START_DATE || '2026-02-06'; // Configurable start date
 
 // ============================================
 // Get Ready Tweets
@@ -71,10 +72,9 @@ if (readyTweets.length === 0) {
 // Schedule Tweets
 // ============================================
 
-// Start from tomorrow
-const startDate = new Date();
-startDate.setDate(startDate.getDate() + 1);
-startDate.setHours(0, 0, 0, 0);
+// Start from configured date
+const startDate = new Date(START_DATE + 'T00:00:00');
+console.log(`📅 Scheduling starts: ${startDate.toDateString()}`);
 
 const insertQueue = db.prepare(`
     INSERT INTO substack_queue (tweet_id, scheduled_at, post_content, media_path, status)
@@ -91,17 +91,23 @@ for (const tweet of readyTweets) {
     const scheduledAt = new Date(currentDate);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
-    // Clean post content (basic cleanup - more can be done in review)
+    // Clean post content
     let content = tweet.full_text || '';
-    // Remove t.co links at end of tweets (often just media links)
-    content = content.replace(/\s*https:\/\/t\.co\/\w+\s*$/, '');
+    // Remove ALL t.co links (media links, quote links, etc.)
+    content = content.replace(/\s*https:\/\/t\.co\/\w+/g, '').trim();
+
+    // Make media path relative
+    let mediaPath = tweet.media_url || null;
+    if (mediaPath && mediaPath.startsWith('/')) {
+        mediaPath = mediaPath.replace(/^.*\/tweet_curator\//, './');
+    }
 
     try {
         insertQueue.run(
             tweet.id,
             scheduledAt.toISOString(),
-            content.trim(),
-            tweet.media_url || null
+            content,
+            mediaPath
         );
         scheduled++;
     } catch (e) {
