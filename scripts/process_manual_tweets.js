@@ -43,7 +43,7 @@ function ensureTag(name, category = 'use') {
 
 function addTag(tweetId, tagId) {
     try {
-        db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(tweetId, tagId, 'script');
+        db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(tweetId, tagId, 'ai');
         return true;
     } catch (e) {
         return false;
