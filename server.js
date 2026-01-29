@@ -890,7 +890,9 @@ app.get('/api/tags/search', (req, res) => {
 // Add tag to tweet
 app.post('/api/tweets/:id/tags', (req, res) => {
     try {
-        const { tagName, tagCategory = 'custom' } = req.body;
+        // Support both 'tagName' (new convention) and 'tag' (app.js legacy)
+        const tagName = req.body.tagName || req.body.tag;
+        const { tagCategory = 'custom' } = req.body;
 
         if (!tagName) {
             return res.status(400).json({ error: 'Tag name required' });
@@ -1082,10 +1084,17 @@ function cleanContent(text) {
     if (!text) return '';
     let cleaned = text;
 
-    // Remove thread numbering patterns (1/, 2/ etc or 1., 2.)
-    cleaned = cleaned.replace(/^(\d+)[.)\/:]\s*/gm, '');
-    cleaned = cleaned.replace(/^[🧵]\s*/gm, '');
-    cleaned = cleaned.replace(/\b(thread|THREAD|Thread):?\s*/gi, '');
+    // Remove thread numbering patterns (recursive loop to handle nested numbering like "1. 1/")
+    let previous;
+    let iterations = 0;
+    do {
+        previous = cleaned;
+        cleaned = cleaned.replace(/^(\d+)[.)\/:]\s*/gm, '');
+        cleaned = cleaned.replace(/^[🧵]\s*/gm, '');
+        cleaned = cleaned.replace(/\b(thread|THREAD|Thread):?\s*/gi, '');
+        cleaned = cleaned.trim();
+        iterations++;
+    } while (cleaned !== previous && iterations < 5);
 
     // HTML entities
     cleaned = cleaned.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
