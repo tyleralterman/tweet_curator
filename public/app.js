@@ -492,10 +492,40 @@ function renderTags() {
     // Add click handlers
     document.querySelectorAll('.tag-btn').forEach(btn => {
         const tagName = btn.dataset.tag;
+        let longPressTimer = null;
+        let didLongPress = false;
+
+        // Helper function for exclude action
+        const handleExclude = () => {
+            const includeIdx = state.filters.tags.indexOf(tagName);
+            const excludeIdx = state.filters.excludeTags.indexOf(tagName);
+
+            // Remove from include if present
+            if (includeIdx >= 0) {
+                state.filters.tags.splice(includeIdx, 1);
+            }
+
+            // Toggle exclude
+            if (excludeIdx >= 0) {
+                state.filters.excludeTags.splice(excludeIdx, 1);
+            } else {
+                state.filters.excludeTags.push(tagName);
+            }
+
+            state.pagination.page = 1;
+            fetchTweets();
+            renderTags();
+        };
 
         // Left-click: INCLUDE filter (show only posts with this tag)
         btn.addEventListener('click', (e) => {
             e.preventDefault();
+
+            // If we just did a long-press, skip the click
+            if (didLongPress) {
+                didLongPress = false;
+                return;
+            }
 
             const includeIdx = state.filters.tags.indexOf(tagName);
             const excludeIdx = state.filters.excludeTags.indexOf(tagName);
@@ -520,25 +550,32 @@ function renderTags() {
         // Right-click: EXCLUDE filter (hide posts with this tag)
         btn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            handleExclude();
+        });
 
-            const includeIdx = state.filters.tags.indexOf(tagName);
-            const excludeIdx = state.filters.excludeTags.indexOf(tagName);
+        // Long-press for mobile: EXCLUDE filter (500ms hold)
+        btn.addEventListener('touchstart', (e) => {
+            didLongPress = false;
+            longPressTimer = setTimeout(() => {
+                didLongPress = true;
+                // Vibrate if available for haptic feedback
+                if (navigator.vibrate) navigator.vibrate(50);
+                handleExclude();
+            }, 500);
+        }, { passive: true });
 
-            // Remove from include if present
-            if (includeIdx >= 0) {
-                state.filters.tags.splice(includeIdx, 1);
+        btn.addEventListener('touchend', () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
             }
+        });
 
-            // Toggle exclude
-            if (excludeIdx >= 0) {
-                state.filters.excludeTags.splice(excludeIdx, 1);
-            } else {
-                state.filters.excludeTags.push(tagName);
+        btn.addEventListener('touchmove', () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
             }
-
-            state.pagination.page = 1;
-            fetchTweets();
-            renderTags();
         });
     });
 }
