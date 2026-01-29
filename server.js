@@ -422,6 +422,7 @@ app.get('/api/tweets', (req, res) => {
             length = '',
             swipe = '',
             tag = '',
+            excludeTag = '',
             reviewed = '',
             excludeRetweets = 'true',
             excludeReplies = 'true',
@@ -513,6 +514,20 @@ app.get('/api/tweets', (req, res) => {
                 havingClause = `HAVING COUNT(DISTINCT tag_filter.name) = ${tags.length}`;
                 // Add tag params at the beginning
                 params.unshift(...tags);
+            }
+        }
+
+        // Exclude tags - hide posts that have ANY of these tags
+        if (excludeTag) {
+            const excludeTags = excludeTag.split(',').filter(t => t.trim());
+            if (excludeTags.length > 0) {
+                const excludePlaceholders = excludeTags.map(() => '?').join(',');
+                conditions.push(`t.id NOT IN (
+                    SELECT tt_excl.tweet_id FROM tweet_tags tt_excl
+                    INNER JOIN tags tag_excl ON tag_excl.id = tt_excl.tag_id
+                    WHERE tag_excl.name IN (${excludePlaceholders})
+                )`);
+                params.push(...excludeTags);
             }
         }
 

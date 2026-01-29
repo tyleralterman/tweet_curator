@@ -309,6 +309,13 @@ body::before {
     text-decoration: line-through;
 }
 
+.tag-btn.excluded {
+    background: rgba(160, 64, 64, 0.3);
+    border-color: var(--danger) !important;
+    color: var(--danger);
+    text-decoration: line-through;
+}
+
 /* Import Section */
 .import-section {
     margin-top: 12px;

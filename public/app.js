@@ -15,7 +15,8 @@ let state = {
         length: '',
         // quality: '', REMOVED
         swipe: '',
-        tags: [], // Changed to array for multi-tag filtering
+        tags: [], // Include filter - show only posts with these tags
+        excludeTags: [], // Exclude filter - hide posts with these tags
         excludeRetweets: true,
         excludeReplies: true,
         excludeThreads: false // Changed to false - show thread starters
@@ -80,6 +81,7 @@ async function fetchTweets() {
         // quality removed
         swipe: state.filters.swipe,
         tag: state.filters.tags.join(','), // Send as comma-separated for multi-tag
+        excludeTag: state.filters.excludeTags.join(','), // Tags to exclude
         excludeRetweets: state.filters.excludeRetweets,
         excludeReplies: state.filters.excludeReplies,
         excludeThreads: state.filters.excludeThreads
@@ -438,20 +440,37 @@ async function loadQuotedTweets() {
 }
 
 function renderTags() {
-    // Helper to check if tag is selected
-    const isSelected = (tagName) => state.filters.tags.includes(tagName);
-    const showHidden = document.getElementById('showHiddenTags')?.checked || false;
+    // Helper to check tag state: 'include', 'exclude', or null
+    const getTagState = (tagName) => {
+        if (state.filters.tags.includes(tagName)) return 'include';
+        if (state.filters.excludeTags.includes(tagName)) return 'exclude';
+        return null;
+    };
 
-    // Helper to render a tag button with hide toggle
-    const renderTagBtn = (tag, extraClass = '') => `
-        <button class="tag-btn ${extraClass} ${isSelected(tag.name) ? 'active' : ''} ${tag.is_hidden ? 'hidden-tag' : ''}" 
-                data-tag="${tag.name}"
-                data-tag-id="${tag.id}"
-                style="border-color: ${tag.color}; ${tag.is_hidden ? 'opacity: 0.5;' : ''}">
-            ${tag.name} <span class="count">${tag.tweet_count}</span>
-            ${showHidden ? `<span class="hide-tag-btn" data-tag-id="${tag.id}" data-is-hidden="${tag.is_hidden ? 1 : 0}" title="${tag.is_hidden ? 'Show tag' : 'Hide tag'}">${tag.is_hidden ? '👁' : '×'}</span>` : ''}
-        </button>
-    `;
+    // Helper to render a tag button with include/exclude states
+    const renderTagBtn = (tag, extraClass = '') => {
+        const tagState = getTagState(tag.name);
+        let stateClass = '';
+        let stateIndicator = '';
+
+        if (tagState === 'include') {
+            stateClass = 'active';
+            stateIndicator = '✓ ';
+        } else if (tagState === 'exclude') {
+            stateClass = 'excluded';
+            stateIndicator = '✗ ';
+        }
+
+        return `
+            <button class="tag-btn ${extraClass} ${stateClass}" 
+                    data-tag="${tag.name}"
+                    data-tag-id="${tag.id}"
+                    style="border-color: ${tag.color}"
+                    title="Left-click: show only | Right-click: hide">
+                ${stateIndicator}${tag.name} <span class="count">${tag.tweet_count}</span>
+            </button>
+        `;
+    };
 
     // Topic tags
     elements.topicTags.innerHTML = state.tags.topic.map(tag => renderTagBtn(tag)).join('');
@@ -471,34 +490,56 @@ function renderTags() {
         elements.customTags.innerHTML = '<span class="no-tags">No custom tags yet</span>';
     }
 
-    // Add click handlers - toggle tags in/out of array
+    // Add click handlers
     document.querySelectorAll('.tag-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            // Ignore if clicking the hide button
-            if (e.target.classList.contains('hide-tag-btn')) return;
+        const tagName = btn.dataset.tag;
 
-            const tagName = btn.dataset.tag;
-            const idx = state.filters.tags.indexOf(tagName);
-            if (idx >= 0) {
-                // Remove tag from filter
-                state.filters.tags.splice(idx, 1);
+        // Left-click: INCLUDE filter (show only posts with this tag)
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const includeIdx = state.filters.tags.indexOf(tagName);
+            const excludeIdx = state.filters.excludeTags.indexOf(tagName);
+
+            // Remove from exclude if present
+            if (excludeIdx >= 0) {
+                state.filters.excludeTags.splice(excludeIdx, 1);
+            }
+
+            // Toggle include
+            if (includeIdx >= 0) {
+                state.filters.tags.splice(includeIdx, 1);
             } else {
-                // Add tag to filter
                 state.filters.tags.push(tagName);
             }
+
             state.pagination.page = 1;
             fetchTweets();
             renderTags();
         });
-    });
 
-    // Add hide button handlers
-    document.querySelectorAll('.hide-tag-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tagId = btn.dataset.tagId;
-            const isCurrentlyHidden = btn.dataset.isHidden === '1';
-            toggleTagVisibility(tagId, !isCurrentlyHidden);
+        // Right-click: EXCLUDE filter (hide posts with this tag)
+        btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+
+            const includeIdx = state.filters.tags.indexOf(tagName);
+            const excludeIdx = state.filters.excludeTags.indexOf(tagName);
+
+            // Remove from include if present
+            if (includeIdx >= 0) {
+                state.filters.tags.splice(includeIdx, 1);
+            }
+
+            // Toggle exclude
+            if (excludeIdx >= 0) {
+                state.filters.excludeTags.splice(excludeIdx, 1);
+            } else {
+                state.filters.excludeTags.push(tagName);
+            }
+
+            state.pagination.page = 1;
+            fetchTweets();
+            renderTags();
         });
     });
 }
@@ -1062,7 +1103,8 @@ function setupEventHandlers() {
             length: '',
             // quality: '', REMOVED
             swipe: '',
-            tag: '',
+            tags: [],
+            excludeTags: [],
             excludeRetweets: true,
             excludeReplies: true,
             excludeThreads: true
