@@ -826,6 +826,31 @@ app.patch('/api/tags/:tagId/visibility', (req, res) => {
     }
 });
 
+// Update tag details
+app.patch('/api/tags/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { category, color, name } = req.body;
+
+        const updates = [];
+        const params = [];
+
+        if (category) { updates.push('category = ?'); params.push(category); }
+        if (color) { updates.push('color = ?'); params.push(color); }
+        if (name) { updates.push('name = ?'); params.push(name); }
+
+        if (updates.length > 0) {
+            params.push(id);
+            db.prepare(`UPDATE tags SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+        }
+
+        const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id);
+        res.json(tag);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Search tags for autocomplete
 app.get('/api/tags/search', (req, res) => {
     try {
