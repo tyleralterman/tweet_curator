@@ -107,8 +107,7 @@ async function fetchTweets() {
 
 async function fetchTags() {
     try {
-        const showHidden = document.getElementById('showHiddenTags')?.checked || false;
-        const response = await fetch(`/api/tags?showHidden=${showHidden}`);
+        const response = await fetch('/api/tags');
         state.tags = await response.json();
         state.allTags = [
             ...state.tags.topic,

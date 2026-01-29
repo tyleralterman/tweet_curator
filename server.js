@@ -762,12 +762,10 @@ function updateSessionStats(swipeStatus) {
 // Get all tags
 app.get('/api/tags', (req, res) => {
     try {
-        const showHidden = req.query.showHidden === 'true';
         const tags = db.prepare(`
             SELECT t.*, COUNT(tt.tweet_id) as tweet_count
             FROM tags t
             LEFT JOIN tweet_tags tt ON t.id = tt.tag_id
-            ${showHidden ? '' : 'WHERE t.is_hidden IS NOT TRUE'}
             GROUP BY t.id
             ORDER BY t.category, t.name
         `).all();
