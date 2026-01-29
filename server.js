@@ -638,6 +638,9 @@ app.get('/api/tweets/:id', (req, res) => {
         delete tweet.tag_names;
         delete tweet.tag_details;
 
+        // Add cleaned text for blog purposes
+        tweet.cleaned_text = cleanContent(tweet.combined_text || tweet.full_text);
+
         res.json({ ...tweet, tags });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1038,6 +1041,87 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Get swipe queue (unreviewed)
+
+// ============================================
+// Text Cleaning Utilities
+// ============================================
+
+const ABBREVIATIONS = {
+    'ppl': 'people', 'rn': 'right now', 'bc': 'because', 'b/c': 'because',
+    'tbh': 'to be honest', 'imo': 'in my opinion', 'imho': 'in my humble opinion',
+    'idk': "I don't know", 'ngl': 'not gonna lie', 'jk': 'just kidding',
+    'w/': 'with', 'w/o': 'without', 'abt': 'about', 'smth': 'something',
+    'sth': 'something', 'prob': 'probably', 'def': 'definitely', 'obv': 'obviously',
+    'v ': 'very ', 'ur': 'your', 'u ': 'you ', 'r ': 'are ', 'thru': 'through',
+    'tho': 'though', 'govt': 'government', 'yrs': 'years', 'yr': 'year',
+    'hrs': 'hours', 'hr': 'hour', 'mins': 'minutes', 'min': 'minute',
+    'secs': 'seconds', 'sec': 'second', 'info': 'information',
+    'convo': 'conversation', 'esp': 'especially', 'diff': 'different',
+    'approx': 'approximately', 'btw': 'by the way', 'fwiw': 'for what it\'s worth',
+    'afaik': 'as far as I know', 'iirc': 'if I recall correctly', 'tldr': 'in summary',
+    'tl;dr': 'in summary', 'wrt': 'with respect to', 're:': 'regarding',
+    'msg': 'message', 'msgs': 'messages', 'acc': 'account', 'acct': 'account',
+    'mgmt': 'management', 'btwn': 'between'
+};
+
+const SPELLING_FIXES = {
+    'definately': 'definitely', 'seperate': 'separate', 'occured': 'occurred',
+    'recieve': 'receive', 'wierd': 'weird', 'untill': 'until', 'alot': 'a lot',
+    'noone': 'no one', 'occassion': 'occasion', 'neccessary': 'necessary',
+    'accomodate': 'accommodate', 'aquire': 'acquire', 'apparantly': 'apparently',
+    'begining': 'beginning', 'beleive': 'believe', 'calender': 'calendar',
+    'collegue': 'colleague', 'commited': 'committed', 'concious': 'conscious',
+    'existance': 'existence', 'goverment': 'government', 'humourous': 'humorous',
+    'independant': 'independent', 'knowlege': 'knowledge', 'liason': 'liaison',
+    'millenium': 'millennium', 'occurance': 'occurrence', 'privelege': 'privilege',
+    'publically': 'publicly', 'recomend': 'recommend', 'refered': 'referred',
+    'succesful': 'successful', 'tommorow': 'tomorrow', 'truely': 'truly'
+};
+
+function cleanContent(text) {
+    if (!text) return '';
+    let cleaned = text;
+
+    // Remove thread numbering patterns (1/, 2/ etc or 1., 2.)
+    cleaned = cleaned.replace(/^(\d+)[.)\/:]\s*/gm, '');
+    cleaned = cleaned.replace(/^[🧵]\s*/gm, '');
+    cleaned = cleaned.replace(/\b(thread|THREAD|Thread):?\s*/gi, '');
+
+    // HTML entities
+    cleaned = cleaned.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
+
+    // Remove t.co links
+    cleaned = cleaned.replace(/\s*https?:\/\/t\.co\/\w+/g, '');
+
+    // Abbreviations
+    for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
+        const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
+        cleaned = cleaned.replace(regex, full);
+    }
+
+    // Spelling
+    for (const [wrong, right] of Object.entries(SPELLING_FIXES)) {
+        const regex = new RegExp(`\\b${wrong}\\b`, 'gi');
+        cleaned = cleaned.replace(regex, right);
+    }
+
+    // Capitalize "I"
+    cleaned = cleaned.replace(/\bi\b/g, 'I');
+
+    // Capitalize start of sentences
+    cleaned = cleaned.replace(/\.\s+([a-z])/g, (match, p1) => '. ' + p1.toUpperCase());
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+
+    // Remove @ mentions
+    cleaned = cleaned.replace(/@(\w+)/g, '$1');
+
+    // Normalize spacing
+    cleaned = cleaned.replace(/  +/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+    return cleaned;
+}
 
 // ============================================
 // Quoted Tweet Fetching

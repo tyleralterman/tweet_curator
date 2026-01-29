@@ -751,7 +751,7 @@ async function openTweetModal(tweetId) {
             <textarea class="notes-textarea" readonly 
                       rows="6" style="background: #1a1a1a; cursor: pointer;"
                       onclick="navigator.clipboard.writeText(this.value); this.style.outline='2px solid #27ae60'; setTimeout(() => this.style.outline='', 1000)"
-                      title="Click to copy">${tweet.combined_text}</textarea>
+                      title="Click to copy">${tweet.cleaned_text || tweet.combined_text}</textarea>
             <small style="color: #666;">Click to copy</small>
         </div>
         ` : ''}
