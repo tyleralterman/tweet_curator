@@ -632,14 +632,18 @@ function updateExportUrls() {
 
 async function openTweetModal(tweetId) {
     let tweet = state.tweets.find(t => t.id === tweetId);
-    if (!tweet) {
-        try {
-            const response = await fetch(`/api/tweets/${tweetId}`);
-            tweet = await response.json();
-        } catch (err) {
-            console.error('Error fetching tweet:', err);
-            return;
+
+    // Always fetch latest details to ensure we have cleaned_text and other generated fields
+    try {
+        const response = await fetch(`/api/tweets/${tweetId}`);
+        if (response.ok) {
+            const detailTweet = await response.json();
+            // Merge with local state to keep position/etc but get fresh data
+            tweet = { ...(tweet || {}), ...detailTweet };
         }
+    } catch (err) {
+        console.error('Error fetching tweet details:', err);
+        if (!tweet) return; // If not in state and fetch failed, abort
     }
 
     state.selectedTweet = tweet;
