@@ -36,7 +36,18 @@
         <div class="swipe-main">
             <!-- Tags Sidebar -->
             <aside class="tags-sidebar" id="tagsSidebar">
-                <h3>🏷️ Topic Tags</h3>
+                <!-- Filter Section -->
+                <div class="sidebar-filter-section"
+                    style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="margin-bottom: 10px;">🌪️ Filter Queue</h3>
+                    <select id="tagFilter"
+                        style="width: 100%; padding: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;">
+                        <option value="">All Tweets</option>
+                        <option value="blog-candidate">Blog Candidates</option>
+                    </select>
+                </div>
+
+                <h3>🏷️ Quick Tag</h3>
                 <div id="topicTagsList" class="tags-list">
                     <!-- Tags loaded dynamically -->
                 </div>

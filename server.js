@@ -705,6 +705,23 @@ app.patch('/api/tweets/:id', (req, res) => {
 
             // Update session stats
             updateSessionStats(swipe_status);
+
+            // AUTO-TAG LOGIC: If liking/superliking a "blog-candidate", auto-add "blog-ready"
+            if (swipe_status === 'like' || swipe_status === 'superlike') {
+                const hasCandidate = db.prepare(`
+                    SELECT 1 FROM tweet_tags tt
+                    JOIN tags t ON tt.tag_id = t.id
+                    WHERE tt.tweet_id = ? AND t.name = 'blog-candidate'
+                `).get(req.params.id);
+
+                if (hasCandidate) {
+                    const readyTag = db.prepare("SELECT id FROM tags WHERE name = 'blog-ready'").get();
+                    if (readyTag) {
+                        db.prepare("INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, 'auto')")
+                            .run(req.params.id, readyTag.id);
+                    }
+                }
+            }
         }
         if (notes !== undefined) {
             updates.push('notes = ?');

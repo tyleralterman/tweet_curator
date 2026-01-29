@@ -7,6 +7,7 @@ const state = {
     queue: [],
     history: [],
     loading: false,
+    filterTag: '', // Filter state
     stats: { total: 0, remaining: 0, today: 0 },
     currentCard: null,
     seenIds: new Set() // Track all tweet IDs we've shown to prevent duplicates
@@ -25,7 +26,8 @@ const elements = {
     todayCount: document.getElementById('todayCount'),
     quickTagInput: document.getElementById('quickTagInput'),
     currentTags: document.getElementById('currentTags'),
-    topicTagsList: document.getElementById('topicTagsList')
+    topicTagsList: document.getElementById('topicTagsList'),
+    tagFilter: document.getElementById('tagFilter') // New element
 };
 
 // Config
@@ -39,6 +41,21 @@ const SWIPE_THRESHOLD = 120; // Increased from 80 for mobile - requires more int
 async function init() {
     await fetchStats();
     await loadTopicTags();
+    // Populate filter with all tags
+    populateTagFilter();
+
+    // Listen for filter changes
+    if (elements.tagFilter) {
+        elements.tagFilter.addEventListener('change', (e) => {
+            state.filterTag = e.target.value;
+            // Reset queue
+            state.queue = [];
+            state.seenIds.clear();
+            elements.cardStack.innerHTML = '';
+            loadMoreTweets();
+        });
+    }
+
     await loadMoreTweets();
     setupEventHandlers();
     setupKeyboardShortcuts();
@@ -94,6 +111,36 @@ async function loadTopicTags() {
     } catch (err) {
         console.error('Error loading topic tags:', err);
     }
+}
+
+// Helper to populate filter dropdown
+function populateTagFilter() {
+    if (!elements.tagFilter) return;
+
+    // Use allTags which is already loaded in loadTopicTags
+    // Sort alphabetically? or by category?
+    // Let's keep blog-candidate at top if exists, then alphabetical
+
+    const sortedTags = [...allTags].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Keep the hardcoded options (All Tweets, Blog Candidates) 
+    // and append others? Or rebuild?
+    // The HTML has "Blog Candidates" hardcoded. Let's preserve that as a quick option
+    // and add others below a separator
+
+    // Actually simplicity is better. Let's just append the rest
+
+    // Create a set of existing values to avoid duplication
+    const existing = new Set(Array.from(elements.tagFilter.options).map(o => o.value));
+
+    sortedTags.forEach(tag => {
+        if (!existing.has(tag.name)) {
+            const option = document.createElement('option');
+            option.value = tag.name;
+            option.textContent = `${tag.name} (${tag.tweet_count})`;
+            elements.tagFilter.appendChild(option);
+        }
+    });
 }
 
 function showAutocompleteSuggestions(query) {
@@ -302,8 +349,11 @@ function focusTagInput() {
 
 async function fetchStats() {
     try {
+        const params = new URLSearchParams();
+        if (state.filterTag) params.append('tag', state.filterTag);
+
         const [queueRes, sessionRes] = await Promise.all([
-            fetch('/api/swipe/queue?limit=1'), // Just to get remaining count
+            fetch(`/api/swipe/queue?limit=1&${params}`), // Just to get remaining count
             fetch('/api/swipe/today')
         ]);
         const queueData = await queueRes.json();
@@ -320,6 +370,10 @@ async function loadMoreTweets() {
 
     try {
         const params = new URLSearchParams({ limit: BATCH_SIZE });
+        if (state.filterTag) {
+            params.append('tag', state.filterTag);
+        }
+
         const response = await fetch(`/api/swipe/queue?${params}`);
         const data = await response.json();
 
