@@ -783,6 +783,34 @@ app.get('/api/tags', (req, res) => {
     }
 });
 
+// Create a new tag
+app.post('/api/tags', (req, res) => {
+    try {
+        const { name, category = 'custom', color = '#8e44ad' } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Tag name is required' });
+        }
+
+        // Check if tag already exists
+        const existing = db.prepare('SELECT * FROM tags WHERE name = ?').get(name.toLowerCase());
+        if (existing) {
+            return res.json(existing); // Return existing tag
+        }
+
+        const result = db.prepare('INSERT INTO tags (name, category, color) VALUES (?, ?, ?)').run(
+            name.toLowerCase(),
+            category,
+            color
+        );
+
+        const newTag = db.prepare('SELECT * FROM tags WHERE id = ?').get(result.lastInsertRowid);
+        res.json(newTag);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Toggle tag visibility (hide/show)
 app.patch('/api/tags/:tagId/visibility', (req, res) => {
     try {
