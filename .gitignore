@@ -33,3 +33,4 @@ npm-debug.log*
 # Twitter archive (large, should not be in repo)
 twitter_archive/
 *.zip
+.puppeteer-profile/

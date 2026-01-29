@@ -105,7 +105,8 @@ async function fetchTweets() {
 
 async function fetchTags() {
     try {
-        const response = await fetch('/api/tags');
+        const showHidden = document.getElementById('showHiddenTags')?.checked || false;
+        const response = await fetch(`/api/tags?showHidden=${showHidden}`);
         state.tags = await response.json();
         state.allTags = [
             ...state.tags.topic,
@@ -214,6 +215,22 @@ async function removeTag(tweetId, tagName) {
     } catch (err) {
         console.error('Error removing tag:', err);
         return false;
+    }
+}
+
+// Toggle tag visibility (hide/show)
+async function toggleTagVisibility(tagId, hidden) {
+    try {
+        const response = await fetch(`/api/tags/${tagId}/visibility`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hidden })
+        });
+        if (response.ok) {
+            fetchTags(); // Refresh tag list
+        }
+    } catch (err) {
+        console.error('Error toggling tag visibility:', err);
     }
 }
 
@@ -423,52 +440,43 @@ async function loadQuotedTweets() {
 function renderTags() {
     // Helper to check if tag is selected
     const isSelected = (tagName) => state.filters.tags.includes(tagName);
+    const showHidden = document.getElementById('showHiddenTags')?.checked || false;
+
+    // Helper to render a tag button with hide toggle
+    const renderTagBtn = (tag, extraClass = '') => `
+        <button class="tag-btn ${extraClass} ${isSelected(tag.name) ? 'active' : ''} ${tag.is_hidden ? 'hidden-tag' : ''}" 
+                data-tag="${tag.name}"
+                data-tag-id="${tag.id}"
+                style="border-color: ${tag.color}; ${tag.is_hidden ? 'opacity: 0.5;' : ''}">
+            ${tag.name} <span class="count">${tag.tweet_count}</span>
+            ${showHidden ? `<span class="hide-tag-btn" data-tag-id="${tag.id}" data-is-hidden="${tag.is_hidden ? 1 : 0}" title="${tag.is_hidden ? 'Show tag' : 'Hide tag'}">${tag.is_hidden ? '👁' : '×'}</span>` : ''}
+        </button>
+    `;
 
     // Topic tags
-    elements.topicTags.innerHTML = state.tags.topic.map(tag => `
-        <button class="tag-btn ${isSelected(tag.name) ? 'active' : ''}" 
-                data-tag="${tag.name}"
-                style="border-color: ${tag.color}">
-            ${tag.name} <span class="count">${tag.tweet_count}</span>
-        </button>
-    `).join('');
+    elements.topicTags.innerHTML = state.tags.topic.map(tag => renderTagBtn(tag)).join('');
 
     // Pattern tags
-    elements.patternTags.innerHTML = state.tags.pattern.map(tag => `
-        <button class="tag-btn ${isSelected(tag.name) ? 'active' : ''}" 
-                data-tag="${tag.name}"
-                style="border-color: ${tag.color}">
-            ${tag.name} <span class="count">${tag.tweet_count}</span>
-        </button>
-    `).join('');
+    elements.patternTags.innerHTML = state.tags.pattern.map(tag => renderTagBtn(tag)).join('');
 
     // Use tags
     if (elements.useTags && state.tags.use) {
-        elements.useTags.innerHTML = state.tags.use.map(tag => `
-            <button class="tag-btn use ${isSelected(tag.name) ? 'active' : ''}" 
-                    data-tag="${tag.name}"
-                    style="border-color: ${tag.color}">
-                ${tag.name} <span class="count">${tag.tweet_count}</span>
-            </button>
-        `).join('');
+        elements.useTags.innerHTML = state.tags.use.map(tag => renderTagBtn(tag, 'use')).join('');
     }
 
     // Custom tags
     if (elements.customTags && state.tags.custom && state.tags.custom.length > 0) {
-        elements.customTags.innerHTML = state.tags.custom.map(tag => `
-            <button class="tag-btn custom ${isSelected(tag.name) ? 'active' : ''}" 
-                    data-tag="${tag.name}"
-                    style="border-color: ${tag.color || '#8e44ad'}">
-                ${tag.name} <span class="count">${tag.tweet_count}</span>
-            </button>
-        `).join('');
+        elements.customTags.innerHTML = state.tags.custom.map(tag => renderTagBtn(tag, 'custom')).join('');
     } else if (elements.customTags) {
         elements.customTags.innerHTML = '<span class="no-tags">No custom tags yet</span>';
     }
 
     // Add click handlers - toggle tags in/out of array
     document.querySelectorAll('.tag-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            // Ignore if clicking the hide button
+            if (e.target.classList.contains('hide-tag-btn')) return;
+
             const tagName = btn.dataset.tag;
             const idx = state.filters.tags.indexOf(tagName);
             if (idx >= 0) {
@@ -481,6 +489,16 @@ function renderTags() {
             state.pagination.page = 1;
             fetchTweets();
             renderTags();
+        });
+    });
+
+    // Add hide button handlers
+    document.querySelectorAll('.hide-tag-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tagId = btn.dataset.tagId;
+            const isCurrentlyHidden = btn.dataset.isHidden === '1';
+            toggleTagVisibility(tagId, !isCurrentlyHidden);
         });
     });
 }
@@ -616,6 +634,13 @@ async function openTweetModal(tweetId) {
                 <button class="swipe-btn review-later ${tweet.swipe_status === 'review_later' ? 'active' : ''}" 
                         data-status="review_later">🔄 Review Later</button>
             </div>
+            <div style="margin-top: 12px;">
+                <button id="blogReadyBtn" class="swipe-btn" 
+                        style="background: ${(tweet.tags || []).some(t => t.name === 'blog-ready') ? '#27ae60' : '#1e4d2b'}; border: 1px solid #27ae60; width: auto; padding: 8px 16px;"
+                        data-tweet-id="${tweet.id}">
+                    📝 ${(tweet.tags || []).some(t => t.name === 'blog-ready') ? '✓ Blog Ready' : 'Add to Blog Queue'}
+                </button>
+            </div>
         </div>
 
         <div id="thread-section" class="modal-section" style="display: none;">
@@ -651,6 +676,18 @@ async function openTweetModal(tweetId) {
                       onclick="navigator.clipboard.writeText(this.value); this.style.outline='2px solid #27ae60'; setTimeout(() => this.style.outline='', 1000)"
                       title="Click to copy">${tweet.combined_text}</textarea>
             <small style="color: #666;">Click to copy</small>
+        </div>
+        ` : ''}
+        
+        ${tweet.blog_text ? `
+        <div class="modal-section">
+            <h4>📝 Blog-Ready Text <span style="font-size: 12px; color: #27ae60;">(cleaned)</span></h4>
+            <textarea class="notes-textarea" readonly 
+                      rows="8" 
+                      style="background: #0d1117; border: 1px solid #27ae60; cursor: pointer; max-height: 300px; overflow-y: auto;"
+                      onclick="navigator.clipboard.writeText(this.value); this.style.outline='2px solid #27ae60'; setTimeout(() => this.style.outline='', 1000)"
+                      title="Click to copy">${tweet.blog_text}</textarea>
+            <small style="color: #27ae60;">✓ Abbreviations expanded, spelling fixed. Click to copy.</small>
         </div>
         ` : ''}
         
@@ -788,6 +825,39 @@ async function openTweetModal(tweetId) {
         btn.textContent = 'Saved!';
         setTimeout(() => btn.textContent = 'Save', 1500);
     });
+
+    // Blog Ready button
+    const blogReadyBtn = document.getElementById('blogReadyBtn');
+    if (blogReadyBtn) {
+        blogReadyBtn.addEventListener('click', async () => {
+            const tweetId = blogReadyBtn.dataset.tweetId;
+            const isAlreadyTagged = (tweet.tags || []).some(t => t.name === 'blog-ready');
+
+            try {
+                if (isAlreadyTagged) {
+                    // Remove tag
+                    await removeTag(tweetId, 'blog-ready');
+                    blogReadyBtn.style.background = '#1e4d2b';
+                    blogReadyBtn.innerHTML = '📝 Add to Blog Queue';
+                    tweet.tags = (tweet.tags || []).filter(t => t.name !== 'blog-ready');
+                } else {
+                    // Add tag
+                    const res = await fetch(`/api/tweets/${tweetId}/tags`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tag: 'blog-ready' })
+                    });
+                    if (res.ok) {
+                        blogReadyBtn.style.background = '#27ae60';
+                        blogReadyBtn.innerHTML = '📝 ✓ Blog Ready';
+                        tweet.tags = [...(tweet.tags || []), { name: 'blog-ready', color: '#27ae60' }];
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to toggle blog-ready tag:', err);
+            }
+        });
+    }
 
     // Use event delegation for remove-tag buttons (handles dynamically added tags)
     const modalTagsContainer = document.getElementById('modalTags');
@@ -948,6 +1018,14 @@ function setupEventHandlers() {
         state.pagination.page = 1;
         fetchTweets();
     });
+
+    // Show hidden tags toggle
+    const showHiddenCheckbox = document.getElementById('showHiddenTags');
+    if (showHiddenCheckbox) {
+        showHiddenCheckbox.addEventListener('change', () => {
+            fetchTags();
+        });
+    }
 
     // Sorting
     elements.sortBy.addEventListener('change', () => {

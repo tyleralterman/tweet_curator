@@ -292,6 +292,23 @@ body::before {
     font-size: 0.65rem;
 }
 
+.tag-btn .hide-tag-btn {
+    margin-left: 4px;
+    padding: 0 3px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.tag-btn:hover .hide-tag-btn {
+    opacity: 1;
+}
+
+.tag-btn.hidden-tag {
+    text-decoration: line-through;
+}
+
 /* Import Section */
 .import-section {
     margin-top: 12px;
