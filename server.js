@@ -123,6 +123,11 @@ try {
         db.prepare('ALTER TABLE tweets ADD COLUMN combined_text TEXT').run();
         console.log('✅ combined_text column added');
     }
+    if (!columns.includes('queue_order')) {
+        console.log('🔄 Adding queue_order column to tweets table...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN queue_order INTEGER DEFAULT 0').run();
+        console.log('✅ queue_order column added');
+    }
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
@@ -1133,7 +1138,56 @@ function cleanContent(text) {
 }
 
 // ============================================
-// Quoted Tweet Fetching
+// Scheduler Endpoints
+// ============================================
+
+app.get('/api/scheduler/queue', (req, res) => {
+    try {
+        const query = `
+            SELECT t.id, t.full_text, t.combined_text, t.media_url, t.created_at, t.queue_order
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'blog-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+        `;
+        const tweets = db.prepare(query).all();
+
+        // Add cleaning logic
+        tweets.forEach(t => {
+            t.cleaned_text = cleanContent(t.combined_text || t.full_text);
+        });
+
+        res.json(tweets);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/scheduler/reorder', (req, res) => {
+    try {
+        const { orderedIds } = req.body;
+        if (!orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'orderedIds array required' });
+        }
+
+        const update = db.prepare('UPDATE tweets SET queue_order = ? WHERE id = ?');
+
+        const updateMany = db.transaction((ids) => {
+            ids.forEach((id, index) => {
+                update.run(index, id);
+            });
+        });
+
+        updateMany(orderedIds);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// Static Files & Catch-all
 // ============================================
 
 // Get quoted tweet content - first checks DB, then fetches from Twitter

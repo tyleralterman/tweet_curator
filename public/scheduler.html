@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Scheduler | Curator</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="scheduler.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+</head>
+
+<body>
+    <header class="app-header">
+        <a href="/" class="back-link">← Dashboard</a>
+        <div class="header-title">
+            <h1>Blog Scheduler</h1>
+            <span class="badge" id="queue-count">0 items</span>
+        </div>
+        <div class="header-actions">
+            <!-- Future: Settings for schedule frequency -->
+            <button id="save-order-btn" class="primary-btn" disabled>Saved</button>
+        </div>
+    </header>
+
+    <main class="scheduler-container">
+        <div class="schedule-timeline">
+            <!-- Date markers could go here -->
+        </div>
+
+        <div id="scheduler-list" class="scheduler-list">
+            <div class="loading">Loading queue...</div>
+        </div>
+    </main>
+
+    <script src="scheduler.js"></script>
+</body>
+
+</html>
