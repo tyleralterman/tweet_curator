@@ -723,6 +723,9 @@ app.patch('/api/tweets/:id', (req, res) => {
                 `).get(req.params.id);
 
                 if (hasCandidate) {
+                    // Ensure tag exists
+                    db.prepare("INSERT OR IGNORE INTO tags (name, category) VALUES ('blog-ready', 'use')").run();
+
                     const readyTag = db.prepare("SELECT id FROM tags WHERE name = 'blog-ready'").get();
                     if (readyTag) {
                         db.prepare("INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, 'auto')")
