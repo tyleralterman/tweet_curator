@@ -1409,6 +1409,11 @@ app.get('/api/swipe/queue', (req, res) => {
         // Count query uses same params (minus limit)
         const remaining = db.prepare(countQuery).get(...finalParams);
 
+        // Inject computed fields
+        tweets.forEach(tweet => {
+            tweet.cleaned_text = cleanContent(tweet.combined_text || tweet.full_text);
+        });
+
         res.json({ tweets, remaining: remaining.count });
     } catch (err) {
         res.status(500).json({ error: err.message });

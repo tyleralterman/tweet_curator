@@ -574,7 +574,7 @@ function createCardElement(tweet) {
 
     // Tags
     const tagsHtml = (tweet.tags || '').split(',').filter(t => t).map(t => `<span class="tag-badge">${t}</span>`).join('');
-    const textContent = cleanText(tweet.full_text, tweet.media_url, tweet.quoted_tweet_id);
+    const textContent = tweet.cleaned_text ? linkify(tweet.cleaned_text) : cleanText(tweet.full_text, tweet.media_url, tweet.quoted_tweet_id);
     const dateStr = new Date(tweet.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     const tweetUrl = `https://twitter.com/i/web/status/${tweet.id}`;
 
@@ -583,7 +583,7 @@ function createCardElement(tweet) {
             <!-- No Header Date (Moved to Footer) -->
             ${tweet.tweet_type === 'thread' ? '<div class="tweet-header"><span class="thread-badge">THREAD</span></div>' : ''}
             
-            <div class="tweet-text">${textContent}</div>
+            <div class="tweet-text" style="white-space: pre-wrap;">${textContent}</div>
             ${mediaHtml}
             ${quotedHtml}
             <div class="card-tags">${tagsHtml}</div>
