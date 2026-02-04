@@ -684,9 +684,14 @@ app.get('/api/tweets/:id/thread', (req, res) => {
 // Update tweet
 app.patch('/api/tweets/:id', (req, res) => {
     try {
-        const { quality_rating, swipe_status, notes, first_impressions, is_reviewed } = req.body;
+        const { quality_rating, swipe_status, notes, first_impressions, is_reviewed, blog_text } = req.body;
         const updates = [];
         const params = [];
+
+        if (blog_text !== undefined) {
+            updates.push('blog_text = ?');
+            params.push(blog_text);
+        }
 
         if (quality_rating !== undefined) {
             updates.push('quality_rating = ?');
