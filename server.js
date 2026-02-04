@@ -128,6 +128,11 @@ try {
         db.prepare('ALTER TABLE tweets ADD COLUMN queue_order INTEGER DEFAULT 0').run();
         console.log('✅ queue_order column added');
     }
+    if (!columns.includes('blog_text')) {
+        console.log('🔄 Adding blog_text column to tweets table...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN blog_text TEXT').run();
+        console.log('✅ blog_text column added');
+    }
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
