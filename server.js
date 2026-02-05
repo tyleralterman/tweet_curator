@@ -810,6 +810,11 @@ app.get('/api/tags', (req, res) => {
             SELECT t.*, COUNT(tt.tweet_id) as tweet_count
             FROM tags t
             LEFT JOIN tweet_tags tt ON t.id = tt.tag_id
+            LEFT JOIN tweets tw ON tt.tweet_id = tw.id
+            WHERE tw.id IS NULL OR (
+                tw.tweet_type NOT IN ('retweet', 'reply') 
+                AND (tw.tweet_type != 'thread' OR tw.in_reply_to_tweet_id IS NULL)
+            )
             GROUP BY t.id
             ORDER BY t.category, t.name
         `).all();
