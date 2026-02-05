@@ -2,20 +2,22 @@
  * Substack Internal API Client
  * 
  * Uses Substack's internal (unofficial) API to create and schedule posts.
- * Authentication via session cookie (connect.sid).
+ * Authentication via session cookie (substack.sid).
  * 
  * Environment variables:
- * - SUBSTACK_SESSION_COOKIE: The connect.sid cookie value
- * - SUBSTACK_PUBLICATION: Your publication subdomain (e.g., "tyleralterman")
+ * - SUBSTACK_SESSION_COOKIE: The substack.sid cookie value
+ * - SUBSTACK_PUBLICATION: Your publication subdomain (e.g., "lalachimera")
+ * - SUBSTACK_CUSTOM_DOMAIN: Optional custom domain (e.g., "lalachimera.com")
  */
 
 const https = require('https');
 
 class SubstackAPI {
-    constructor(publication, sessionCookie) {
+    constructor(publication, sessionCookie, customDomain = null) {
         this.publication = publication;
         this.sessionCookie = sessionCookie;
-        this.baseUrl = `${publication}.substack.com`;
+        // Use custom domain if provided, otherwise use substack.com subdomain
+        this.baseUrl = customDomain || `${publication}.substack.com`;
     }
 
     /**
@@ -30,7 +32,7 @@ class SubstackAPI {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Cookie': `connect.sid=${this.sessionCookie}`,
+                    'Cookie': `substack.sid=${this.sessionCookie}`,
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
                 }
             };

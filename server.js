@@ -1402,7 +1402,8 @@ app.post('/api/scheduler/push-to-substack/:id', async (req, res) => {
             return res.json({ success: true, message: 'Added to local queue (set SUBSTACK_SESSION_COOKIE to enable API)', queueId: result.lastInsertRowid });
         }
 
-        const api = new SubstackAPI(publication, sessionCookie);
+        const customDomain = process.env.SUBSTACK_CUSTOM_DOMAIN; // e.g., 'lalachimera.com'
+        const api = new SubstackAPI(publication, sessionCookie, customDomain);
 
         // Get next available slot
         const nextSlot = await api.getNextAvailableSlot();
@@ -1445,7 +1446,8 @@ app.post('/api/scheduler/batch-schedule', async (req, res) => {
             return res.status(400).json({ error: 'SUBSTACK_SESSION_COOKIE not set' });
         }
 
-        const api = new SubstackAPI(publication, sessionCookie);
+        const customDomain = process.env.SUBSTACK_CUSTOM_DOMAIN;
+        const api = new SubstackAPI(publication, sessionCookie, customDomain);
 
         // Get pending items from local queue, ordered by queue_order
         const pendingItems = db.prepare(`
