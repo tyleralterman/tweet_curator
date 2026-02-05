@@ -16,6 +16,21 @@ const START_DATE = new Date('2026-02-15T00:00:00');
 const INTERVAL_DAYS = 7;
 
 async function init() {
+    // Compact Mode Toggle
+    const toggleBtn = document.getElementById('toggle-compact');
+    const queueContainer = document.getElementById('schedule-queue');
+
+    if (toggleBtn && queueContainer) {
+        toggleBtn.addEventListener('click', () => {
+            queueContainer.classList.toggle('compact-mode');
+            const isCompact = queueContainer.classList.contains('compact-mode');
+            toggleBtn.innerHTML = isCompact ?
+                '<span class="icon">↕️</span> Expand All' :
+                '<span class="icon">↕️</span> Minimize All';
+        });
+    }
+
+    // Initial Render
     await fetchQueue();
     setupSortable();
 
