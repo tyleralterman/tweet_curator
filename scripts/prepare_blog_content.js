@@ -65,7 +65,7 @@ const ABBREVIATIONS = {
     'sb': 'somebody',
     'smb': 'somebody',
     'abt': 'about',
-    'v': 'very',
+    // 'v': 'very', // REMOVED - too dangerous, matches 'v' in I've, you've, etc.
     'rly': 'really',
     'rlly': 'really',
     'obvi': 'obviously',
@@ -226,11 +226,16 @@ function prepareBlogContent(text) {
     cleaned = cleaned.replace(/\s*https?:\/\/t\.co\/\w+/g, '');
 
     // 4. Expand abbreviations (case-insensitive, word boundary)
+    // Must avoid matching after apostrophes (e.g., I've should not become I'versus)
     for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
         // Handle special case for "were" which could be past tense
         if (abbr === 'were') continue; // Skip - too ambiguous
 
-        const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
+        // Skip any short replacements that could match contraction suffixes
+        if (['vs', 've', 'd', 'll', 's', 're', 'm'].includes(abbr.toLowerCase())) continue;
+
+        // Use negative lookbehind to avoid matching after apostrophe
+        const regex = new RegExp(`(?<!')\\b${abbr}\\b`, 'gi');
         cleaned = cleaned.replace(regex, (match) => {
             // Preserve original capitalization for first letter
             if (match[0] === match[0].toUpperCase()) {
@@ -299,13 +304,11 @@ function prepareBlogContent(text) {
 // ============================================
 console.log('📝 Preparing blog content for Substack...\n');
 
-// Get all tweets with blog-related tags
+// Get ALL tweets that have combined_text (for complete reprocessing after bug fix)
 const tweets = db.prepare(`
-    SELECT DISTINCT t.id, t.full_text, t.combined_text, t.blog_text
-    FROM tweets t
-    JOIN tweet_tags tt ON t.id = tt.tweet_id
-    JOIN tags tag ON tt.tag_id = tag.id
-    WHERE tag.name IN ('blog-post', 'blog-candidate', 'blog-ready')
+    SELECT id, full_text, combined_text, blog_text
+    FROM tweets
+    WHERE combined_text IS NOT NULL OR full_text IS NOT NULL
 `).all();
 
 console.log(`Found ${tweets.length} tweets to process.\n`);

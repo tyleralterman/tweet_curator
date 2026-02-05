@@ -19,7 +19,8 @@ let state = {
         excludeTags: [], // Exclude filter - hide posts with these tags
         excludeRetweets: true,
         excludeReplies: true,
-        excludeThreads: false // Changed to false - show thread starters
+        excludeThreads: false, // Changed to false - show thread starters
+        excludeDuplicates: true // Hide duplicate tweets by default
     },
     sort: { by: 'created_at', order: 'desc' },
     selectedTweet: null,
@@ -40,6 +41,7 @@ const elements = {
     excludeRetweets: document.getElementById('excludeRetweets'),
     excludeReplies: document.getElementById('excludeReplies'),
     excludeThreads: document.getElementById('excludeThreads'),
+    excludeDuplicates: document.getElementById('excludeDuplicates'),
     sortBy: document.getElementById('sortBy'),
     sortOrder: document.getElementById('sortOrder'),
     prevPage: document.getElementById('prevPage'),
@@ -84,7 +86,8 @@ async function fetchTweets() {
         excludeTag: state.filters.excludeTags.join(','), // Tags to exclude
         excludeRetweets: state.filters.excludeRetweets,
         excludeReplies: state.filters.excludeReplies,
-        excludeThreads: state.filters.excludeThreads
+        excludeThreads: state.filters.excludeThreads,
+        excludeDuplicates: state.filters.excludeDuplicates
     });
 
     try {
@@ -1101,6 +1104,12 @@ function setupEventHandlers() {
 
     elements.excludeThreads.addEventListener('change', () => {
         state.filters.excludeThreads = elements.excludeThreads.checked;
+        state.pagination.page = 1;
+        fetchTweets();
+    });
+
+    elements.excludeDuplicates.addEventListener('change', () => {
+        state.filters.excludeDuplicates = elements.excludeDuplicates.checked;
         state.pagination.page = 1;
         fetchTweets();
     });

@@ -437,6 +437,7 @@ app.get('/api/tweets', (req, res) => {
             excludeRetweets = 'true',
             excludeReplies = 'true',
             excludeThreads = 'false',
+            excludeDuplicates = 'true',
             sort = 'created_at',
             order = 'desc'
         } = req.query;
@@ -513,6 +514,15 @@ app.get('/api/tweets', (req, res) => {
             // Only hide subsequent tweets in threads (those that are replies to another tweet)
             // Keep thread-starter tweets visible (they have tweet_type='thread' but no in_reply_to)
             conditions.push(`(t.tweet_type != 'thread' OR t.in_reply_to_tweet_id IS NULL)`);
+        }
+
+        if (excludeDuplicates === 'true') {
+            // Exclude tweets tagged as 'duplicate'
+            conditions.push(`NOT EXISTS (
+                SELECT 1 FROM tweet_tags td
+                JOIN tags dup_tag ON td.tag_id = dup_tag.id
+                WHERE td.tweet_id = t.id AND dup_tag.name = 'duplicate'
+            )`);
         }
 
         let joinClause = '';
