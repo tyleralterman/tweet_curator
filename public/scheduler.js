@@ -332,8 +332,7 @@ function linkify(text) {
 
 document.addEventListener('DOMContentLoaded', init);
 
+
 window.triggerImageUpload = function (id) {
     alert('Image upload coming soon! (ID: ' + id + ')');
 }
-
-init();
