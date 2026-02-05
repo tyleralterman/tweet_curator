@@ -18,7 +18,7 @@ const INTERVAL_DAYS = 7;
 async function init() {
     // Compact Mode Toggle
     const toggleBtn = document.getElementById('toggle-compact');
-    const queueContainer = document.getElementById('schedule-queue');
+    const queueContainer = document.getElementById('scheduler-list');
 
     if (toggleBtn && queueContainer) {
         toggleBtn.addEventListener('click', () => {
