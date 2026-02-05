@@ -49,7 +49,7 @@ console.log(`🗑️ Removed ${removed} tags (did not meet criteria).`);
 const candidates = db.prepare(`
     SELECT id, combined_text, full_text 
     FROM tweets 
-    WHERE (combined_text IS NOT NULL OR LENGTH(full_text) >= 1000)
+    WHERE (combined_text IS NOT NULL OR LENGTH(full_text) >= 550)
     AND id NOT IN (
         SELECT tweet_id FROM tweet_tags 
         WHERE tag_id = ?
@@ -66,9 +66,10 @@ for (const tweet of candidates) {
 
     if (tweet.combined_text) {
         const parts = (tweet.combined_text.match(/^\d+\.\s/gm) || []).length;
-        if (parts >= 4) shouldTag = true;
+        // Qualify if it has enough parts OR if the total text is long enough
+        if (parts >= 4 || tweet.combined_text.length >= 550) shouldTag = true;
     } else {
-        if (tweet.full_text.length >= 1000) shouldTag = true;
+        if (tweet.full_text.length >= 550) shouldTag = true;
     }
 
     if (shouldTag) {

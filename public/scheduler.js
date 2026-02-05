@@ -9,13 +9,11 @@ let state = {
     hasChanges: false
 };
 
-// Start Date: Calculate the next Monday or tomorrow?
-// Let's default to Tomorrow for now.
-const START_DATE = new Date();
-START_DATE.setDate(START_DATE.getDate() + 1);
+// Start Date: Feb 15, 2026
+const START_DATE = new Date('2026-02-15T00:00:00');
 
-// 2 posts per week = 1 post every 3.5 days
-const INTERVAL_DAYS = 3.5;
+// Weekly on Sundays = 7 days
+const INTERVAL_DAYS = 7;
 
 async function init() {
     await fetchQueue();
@@ -37,7 +35,7 @@ async function fetchQueue() {
         updateCount();
     } catch (err) {
         console.error('Error fetching queue:', err);
-        elements.list.innerHTML = '<div class="loading">Error loading queue</div>';
+        elements.list.innerHTML = '<div class="loading">Error loading queue. Is the server running?</div>';
     }
 }
 
@@ -46,8 +44,7 @@ function calculateDates(items) {
 
     items.forEach((item, index) => {
         // e.g. index 0 -> 0 days
-        // index 1 -> 3.5 days -> +3 days (floor)
-        // index 2 -> 7 days
+        // index 1 -> 7 days
         const daysToAdd = Math.floor(index * INTERVAL_DAYS);
         const itemDate = new Date(baseDate);
         itemDate.setDate(itemDate.getDate() + daysToAdd);
@@ -116,10 +113,125 @@ function createItemHtml(item) {
             
             <div class="item-content">
                 ${imageHtml}
+                <div class="title-section">
+                    ${renderTitleOptions(item)}
+                </div>
                 <div class="item-text">${linkify(item.cleaned_text || item.combined_text || item.full_text)}</div>
             </div>
         </div>
     `;
+}
+
+function renderTitleOptions(item) {
+    let options = [];
+    try { options = JSON.parse(item.title_options || '[]'); } catch (e) { }
+
+    let selected = null;
+    try { selected = item.selected_title ? JSON.parse(item.selected_title) : null; } catch (e) { }
+
+    const currentTitle = selected ? selected.title : '';
+    const currentSubtitle = selected ? selected.subtitle : '';
+
+    let html = '<div class="title-container">';
+
+    // 1. AI Options
+    if (options.length > 0) {
+        html += '<div class="title-options">';
+        html += '<label class="title-label">Suggested Titles:</label>';
+        options.forEach((opt, idx) => {
+            // Check if current manual title matches this option exactly
+            const isChecked = (currentTitle === opt.title && currentSubtitle === opt.subtitle);
+            html += `
+                <div class="title-option" onclick="useTitle('${item.id}', ${idx})">
+                    <input type="radio" name="t-opt-${item.id}" ${isChecked ? 'checked' : ''}>
+                    <div class="title-text-group">
+                        <span class="main-title">${opt.title}</span>
+                        <span class="sub-title">${opt.subtitle}</span>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+
+    // 2. Manual Inputs
+    html += `
+        <div class="manual-title-inputs">
+            <label class="title-label">Post Title & Subtitle:</label>
+            <input type="text" class="title-input main" 
+                   value="${(currentTitle || '').replace(/"/g, '&quot;')}" 
+                   placeholder="Enter Title..." 
+                   onchange="saveManualTitle('${item.id}', this.value, null)">
+                   
+            <input type="text" class="title-input sub" 
+                   value="${(currentSubtitle || '').replace(/"/g, '&quot;')}" 
+                   placeholder="Enter Subtitle..." 
+                   onchange="saveManualTitle('${item.id}', null, this.value)">
+        </div>
+    </div>`;
+
+    return html;
+}
+
+window.useTitle = function (id, idx) {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+
+    let options = [];
+    try { options = JSON.parse(item.title_options); } catch (e) { }
+
+    const choice = options[idx];
+    if (choice) {
+        saveToDb(id, choice.title, choice.subtitle);
+
+        // Update UI Inputs
+        const container = document.querySelector(`.schedule-item[data-id="${id}"]`);
+        if (container) {
+            const titleInput = container.querySelector('.title-input.main');
+            const subInput = container.querySelector('.title-input.sub');
+            if (titleInput) titleInput.value = choice.title;
+            if (subInput) subInput.value = choice.subtitle;
+
+            const radios = container.querySelectorAll('input[type="radio"]');
+            radios.forEach((r, i) => r.checked = (i === idx));
+        }
+    }
+}
+
+window.saveManualTitle = function (id, newTitle, newSubtitle) {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+
+    let current = {};
+    try { current = JSON.parse(item.selected_title || '{}'); } catch (e) { }
+
+    const title = newTitle !== null ? newTitle : (current.title || '');
+    const subtitle = newSubtitle !== null ? newSubtitle : (current.subtitle || '');
+
+    // Uncheck radios
+    const container = document.querySelector(`.schedule-item[data-id="${id}"]`);
+    if (container) {
+        const radios = container.querySelectorAll('input[type="radio"]');
+        radios.forEach(r => r.checked = false);
+    }
+
+    saveToDb(id, title, subtitle);
+}
+
+async function saveToDb(id, title, subtitle) {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+
+    try {
+        await fetch('/api/scheduler/update-title', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, title, subtitle })
+        });
+        item.selected_title = JSON.stringify({ title, subtitle });
+    } catch (err) {
+        console.error('Failed to save title', err);
+    }
 }
 
 function setupSortable() {
@@ -129,7 +241,6 @@ function setupSortable() {
         ghostClass: 'sortable-ghost',
         dragClass: 'sortable-drag',
         onEnd: function () {
-            // Re-calculate dates based on new DOM order
             updateOrderFromDom();
             enableSave();
         }
@@ -147,13 +258,7 @@ function updateOrderFromDom() {
     });
 
     state.items = newItems;
-
-    // Recalculate dates for visual feedback
     calculateDates(state.items);
-
-    // Re-render DATES only? Or full list?
-    // Full list re-render kills the drag state if done incorrectly, but we are inside 'onEnd'.
-    // Better to update dates specifically in DOM to avoid flash.
     updateDatesInDom();
 }
 
@@ -207,14 +312,11 @@ function updateCount() {
 
 function linkify(text) {
     if (!text) return '';
-    // Simple mock for now - you might want to reuse the one from app.js or import utils
     return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// TODO: Implement image upload
 window.triggerImageUpload = function (id) {
     alert('Image upload coming soon! (ID: ' + id + ')');
 }
 
-// Start
 init();

@@ -133,6 +133,16 @@ try {
         db.prepare('ALTER TABLE tweets ADD COLUMN blog_text TEXT').run();
         console.log('✅ blog_text column added');
     }
+
+    if (!columns.includes('title_options')) {
+        console.log('🔄 Adding title_options column...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN title_options TEXT').run(); // JSON array
+    }
+
+    if (!columns.includes('selected_title')) {
+        console.log('🔄 Adding selected_title column...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN selected_title TEXT').run(); // JSON object
+    }
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
@@ -1178,7 +1188,7 @@ function cleanContent(text) {
 app.get('/api/scheduler/queue', (req, res) => {
     try {
         const query = `
-            SELECT t.id, t.full_text, t.combined_text, t.blog_text, t.media_url, t.created_at, t.queue_order
+            SELECT t.id, t.full_text, t.combined_text, t.blog_text, t.media_url, t.created_at, t.queue_order, t.title_options, t.selected_title
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
@@ -1214,6 +1224,38 @@ app.post('/api/scheduler/reorder', (req, res) => {
         });
 
         updateMany(orderedIds);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/scheduler/update-title', (req, res) => {
+    try {
+        const { id, title, subtitle } = req.body;
+        if (!id || !title) {
+            return res.status(400).json({ error: 'ID and Title are required' });
+        }
+
+        const selected = JSON.stringify({ title, subtitle });
+        db.prepare('UPDATE tweets SET selected_title = ? WHERE id = ?').run(selected, id);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/scheduler/update-options', (req, res) => {
+    try {
+        const { id, title_options } = req.body;
+        if (!id || !title_options) {
+            return res.status(400).json({ error: 'ID and Options required' });
+        }
+
+        const optionsStr = typeof title_options === 'string' ? title_options : JSON.stringify(title_options);
+        db.prepare('UPDATE tweets SET title_options = ? WHERE id = ?').run(optionsStr, id);
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
