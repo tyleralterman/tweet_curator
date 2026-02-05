@@ -469,7 +469,10 @@ app.get('/api/tweets', (req, res) => {
                 conditions.push(`EXISTS (SELECT 1 FROM tweets child WHERE child.in_reply_to_tweet_id = t.id)`);
             } else if (type === 'no_media') {
                 // Filter for tweets with no images/media
+                // Check media_url column AND exclude t.co links in text (often images)
                 conditions.push(`(t.media_url IS NULL OR t.media_url = '')`);
+                conditions.push(`COALESCE(t.combined_text, t.full_text) NOT LIKE '%t.co/%'`);
+                conditions.push(`COALESCE(t.combined_text, t.full_text) NOT LIKE '%pic.twitter%'`);
             } else {
                 conditions.push(`t.tweet_type = ?`);
                 params.push(type);
