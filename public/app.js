@@ -293,6 +293,10 @@ function renderTweets() {
                 tweet.swipe_status === 'dislike' ? '👎' :
                     tweet.swipe_status === 'review_later' ? '🔄' : '';
 
+        // Blog-ready badge - green indicator when tweet is tagged blog-ready
+        const isBlogReady = tweet.tags && tweet.tags.some(t => t.name === 'blog-ready');
+        const blogReadyBadge = isBlogReady ? '📝' : '';
+
         // In createTweetElement:
         // Quality Badge REMOVED
         const qualityBadge = '';
@@ -361,6 +365,7 @@ function renderTweets() {
                 <div class="tweet-header">
                     <div class="tweet-badges">
                         ${swipeBadge ? `<span class="swipe-badge">${swipeBadge}</span>` : ''}
+                        ${blogReadyBadge ? `<span class="swipe-badge" style="background: #27ae60;" title="Blog Ready">${blogReadyBadge}</span>` : ''}
                         ${qualityBadge}
                     </div>
                 </div>
