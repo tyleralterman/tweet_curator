@@ -2,7 +2,7 @@
  * Substack Internal API Client
  * 
  * Uses Substack's internal (unofficial) API to create and schedule posts.
- * Authentication via session cookie (substack.sid).
+ * Authentication via session cookie (substack.sid) + CSRF token.
  * 
  * Environment variables:
  * - SUBSTACK_SESSION_COOKIE: The substack.sid cookie value
@@ -15,32 +15,90 @@ const https = require('https');
 class SubstackAPI {
     constructor(publication, sessionCookie, customDomain = null) {
         this.publication = publication;
-        this.sessionCookie = sessionCookie;
+        this.sessionCookie = decodeURIComponent(sessionCookie);
         // Use custom domain if provided, otherwise use substack.com subdomain
         this.baseUrl = customDomain || `${publication}.substack.com`;
+        this.csrfToken = null;
+    }
+
+    /**
+     * Fetch a page and extract CSRF token from it
+     */
+    async fetchCsrfToken() {
+        return new Promise((resolve, reject) => {
+            const options = {
+                hostname: this.baseUrl,
+                port: 443,
+                path: '/publish/post',
+                method: 'GET',
+                headers: {
+                    'Cookie': `substack.sid=${this.sessionCookie}`,
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                }
+            };
+
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    // Extract CSRF token from page
+                    // Look for window.analytics_config or __NEXT_DATA__
+                    const csrfMatch = data.match(/"csrfToken":"([^"]+)"/);
+                    if (csrfMatch) {
+                        this.csrfToken = csrfMatch[1];
+                        console.log('✅ CSRF token extracted');
+                        resolve(this.csrfToken);
+                    } else {
+                        // Try alternate patterns
+                        const altMatch = data.match(/csrf[_-]?token['"]\s*[:=]\s*['"]([^'"]+)['"]/i);
+                        if (altMatch) {
+                            this.csrfToken = altMatch[1];
+                            console.log('✅ CSRF token extracted (alt pattern)');
+                            resolve(this.csrfToken);
+                        } else {
+                            console.warn('⚠️ Could not find CSRF token in page');
+                            resolve(null);
+                        }
+                    }
+                });
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
     }
 
     /**
      * Make authenticated request to Substack API
      */
     async request(method, path, body = null) {
+        // Fetch CSRF token if we don't have one and this is a write operation
+        if (!this.csrfToken && method !== 'GET') {
+            await this.fetchCsrfToken();
+        }
+
         return new Promise((resolve, reject) => {
-            // URL-decode the session cookie if it contains encoded chars
-            const decodedCookie = decodeURIComponent(this.sessionCookie);
+            const headers = {
+                'Content-Type': 'application/json',
+                'Cookie': `substack.sid=${this.sessionCookie}`,
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Origin': `https://${this.baseUrl}`,
+                'Referer': `https://${this.baseUrl}/publish/post`
+            };
+
+            // Add CSRF token if we have one
+            if (this.csrfToken) {
+                headers['x-csrf-token'] = this.csrfToken;
+            }
 
             const options = {
                 hostname: this.baseUrl,
                 port: 443,
                 path: path,
                 method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': `substack.sid=${decodedCookie}`,
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/json',
-                    'Origin': `https://${this.baseUrl}`,
-                    'Referer': `https://${this.baseUrl}/publish/posts`
-                }
+                headers: headers
             };
 
             const req = https.request(options, (res) => {
@@ -54,7 +112,7 @@ class SubstackAPI {
                             resolve(data);
                         }
                     } else {
-                        console.error(`Substack API Error: ${res.statusCode}`, data);
+                        console.error(`Substack API Error: ${res.statusCode}`, data.substring(0, 500));
                         reject(new Error(`API Error: ${res.statusCode} - ${data.substring(0, 200)}`));
                     }
                 });
