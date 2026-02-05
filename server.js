@@ -1178,7 +1178,7 @@ function cleanContent(text) {
 app.get('/api/scheduler/queue', (req, res) => {
     try {
         const query = `
-            SELECT t.id, t.full_text, t.combined_text, t.media_url, t.created_at, t.queue_order
+            SELECT t.id, t.full_text, t.combined_text, t.blog_text, t.media_url, t.created_at, t.queue_order
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
@@ -1187,9 +1187,9 @@ app.get('/api/scheduler/queue', (req, res) => {
         `;
         const tweets = db.prepare(query).all();
 
-        // Add cleaning logic
+        // Use stored blog_text logic
         tweets.forEach(t => {
-            t.cleaned_text = cleanContent(t.combined_text || t.full_text);
+            t.cleaned_text = t.blog_text || cleanContent(t.combined_text || t.full_text);
         });
 
         res.json(tweets);
