@@ -145,6 +145,29 @@ try {
         console.log('🔄 Adding selected_title column...');
         db.prepare('ALTER TABLE tweets ADD COLUMN selected_title TEXT').run(); // JSON object
     }
+
+    if (!columns.includes('header_image')) {
+        console.log('🔄 Adding header_image column...');
+        db.prepare('ALTER TABLE tweets ADD COLUMN header_image TEXT').run(); // Path to uploaded header image
+    }
+
+    // Create substack_blog_queue table for Substack article posting
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS substack_blog_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tweet_id TEXT,
+            title TEXT,
+            subtitle TEXT,
+            header_image TEXT,
+            body_content TEXT,
+            scheduled_at TEXT,
+            status TEXT DEFAULT 'pending',
+            posted_at TEXT,
+            substack_url TEXT,
+            error_message TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
@@ -264,6 +287,7 @@ try {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
 // Search Utilities - Google-style search with stemming
@@ -1210,7 +1234,7 @@ function cleanContent(text) {
 app.get('/api/scheduler/queue', (req, res) => {
     try {
         const query = `
-            SELECT t.id, t.full_text, t.combined_text, t.blog_text, t.media_url, t.created_at, t.queue_order, t.title_options, t.selected_title
+            SELECT t.id, t.full_text, t.combined_text, t.blog_text, t.media_url, t.header_image, t.created_at, t.queue_order, t.title_options, t.selected_title
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
@@ -1279,6 +1303,98 @@ app.post('/api/scheduler/update-options', (req, res) => {
         db.prepare('UPDATE tweets SET title_options = ? WHERE id = ?').run(optionsStr, id);
 
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Image upload for scheduler items
+const headerUpload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const dir = path.join(__dirname, 'uploads', 'headers');
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname);
+            cb(null, `${req.params.id}_${Date.now()}${ext}`);
+        }
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) cb(null, true);
+        else cb(new Error('Only images allowed'), false);
+    }
+});
+
+app.post('/api/scheduler/upload-image/:id', headerUpload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image uploaded' });
+        }
+        const imagePath = `/uploads/headers/${req.file.filename}`;
+        db.prepare('UPDATE tweets SET header_image = ? WHERE id = ?').run(imagePath, req.params.id);
+        res.json({ success: true, path: imagePath });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Push scheduler item to Substack blog queue
+app.post('/api/scheduler/push-to-substack/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { scheduledAt } = req.body; // Optional scheduled date
+
+        // Get tweet data
+        const tweet = db.prepare(`
+            SELECT id, blog_text, combined_text, full_text, header_image, selected_title
+            FROM tweets WHERE id = ?
+        `).get(id);
+
+        if (!tweet) {
+            return res.status(404).json({ error: 'Tweet not found' });
+        }
+
+        // Parse title/subtitle
+        let title = 'Untitled';
+        let subtitle = '';
+        try {
+            const selected = JSON.parse(tweet.selected_title || '{}');
+            title = selected.title || 'Untitled';
+            subtitle = selected.subtitle || '';
+        } catch (e) { }
+
+        // Get body content
+        const bodyContent = tweet.blog_text || cleanContent(tweet.combined_text || tweet.full_text);
+
+        // Check if already in queue
+        const existing = db.prepare('SELECT id FROM substack_blog_queue WHERE tweet_id = ? AND status = ?').get(id, 'pending');
+        if (existing) {
+            return res.json({ success: true, message: 'Already in queue', queueId: existing.id });
+        }
+
+        // Insert into queue
+        const result = db.prepare(`
+            INSERT INTO substack_blog_queue (tweet_id, title, subtitle, header_image, body_content, scheduled_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, title, subtitle, tweet.header_image, bodyContent, scheduledAt || null);
+
+        res.json({ success: true, queueId: result.lastInsertRowid });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get Substack queue status
+app.get('/api/substack/queue', (req, res) => {
+    try {
+        const items = db.prepare(`
+            SELECT * FROM substack_blog_queue 
+            ORDER BY scheduled_at ASC, created_at DESC
+        `).all();
+        res.json(items);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -400,8 +400,8 @@ body {
     margin: 0;
     -webkit-line-clamp: 1;
     line-clamp: 1;
-    font-weight: 600;
-    /* Bolder */
+    font-weight: 500;
+    /* Reduced from 600 */
     font-size: 16px;
     /* Larger */
     letter-spacing: 0.02em;
@@ -409,6 +409,74 @@ body {
     color: #ffffff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
     /* Better contrast against glass */
+}
+
+/* Expanded Mode */
+.schedule-item.expanded .item-text {
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: auto;
+    max-height: 200px;
+    /* Adjust as needed */
+}
+
+.schedule-item.expanded .title-section,
+.schedule-item.expanded .item-image-area,
+.schedule-item.expanded .manual-title-inputs {
+    display: block;
+    /* Or flex, grid, etc., depending on original display */
+}
+
+/* Image Area & Placeholders */
+.item-image-area {
+    width: 120px;
+    height: 72px;
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.item-image-area:hover {
+    border-color: #00d4ff;
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.media-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.item-image-area:hover .media-preview {
+    transform: scale(1.1);
+}
+
+.image-placeholder-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.image-placeholder-text svg {
+    width: 20px;
+    height: 20px;
+    opacity: 0.7;
 }
 
 /* Scrollbar */
@@ -427,4 +495,83 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 1000;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+/* Expand Toggle Cursor */
+.item-content {
+    cursor: pointer;
+}
+
+.schedule-item .drag-handle {
+    cursor: grab;
+}
+
+.schedule-item .drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Item Actions */
+.item-actions {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-substack {
+    background: linear-gradient(135deg, #ff6719, #e55d15);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(255, 103, 25, 0.3);
+}
+
+.btn-substack:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 103, 25, 0.4);
+    filter: brightness(1.1);
+}
+
+.btn-substack:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Hide actions in compact mode */
+.compact-mode .item-actions {
+    display: none !important;
 }

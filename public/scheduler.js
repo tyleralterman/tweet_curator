@@ -78,6 +78,9 @@ function renderList() {
     }
 
     elements.list.innerHTML = state.items.map(item => createItemHtml(item)).join('');
+
+    // Add expand/collapse click handlers
+    setupExpandCollapse();
 }
 
 function createItemHtml(item) {
@@ -86,13 +89,15 @@ function createItemHtml(item) {
     const month = date.toLocaleString('default', { month: 'short' });
     const year = date.getFullYear();
 
-    // Image logic
+    // Image logic - check header_image (uploaded) first, then media_url (tweet media)
     let imageHtml = '';
-    if (item.media_url) {
+    const imageUrl = item.header_image || item.media_url;
+
+    if (imageUrl) {
         imageHtml = `
             <div class="item-has-media">
-                <div class="item-image-area">
-                    <img src="${item.media_url}" class="media-preview" alt="Media">
+                <div class="item-image-area" onclick="triggerImageUpload('${item.id}')">
+                    <img src="${imageUrl}" class="media-preview" alt="Header Image">
                 </div>
             </div>
         `;
@@ -136,6 +141,11 @@ function createItemHtml(item) {
                     ${renderTitleOptions(item)}
                 </div>
                 <div class="item-text">${linkify(item.cleaned_text || item.combined_text || item.full_text)}</div>
+                <div class="item-actions">
+                    <button class="btn-substack" onclick="pushToSubstack('${item.id}', event)">
+                        <span class="icon">📝</span> Push to Substack
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -242,15 +252,54 @@ async function saveToDb(id, title, subtitle) {
     if (!item) return;
 
     try {
-        await fetch('/api/scheduler/update-title', {
+        const res = await fetch('/api/scheduler/update-title', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, title, subtitle })
         });
-        item.selected_title = JSON.stringify({ title, subtitle });
+        if (res.ok) {
+            item.selected_title = JSON.stringify({ title, subtitle });
+            showToast('Title saved ✓');
+        } else {
+            showToast('Save failed!', true);
+        }
     } catch (err) {
         console.error('Failed to save title', err);
+        showToast('Save failed!', true);
     }
+}
+
+// Toast notification for feedback
+function showToast(message, isError = false) {
+    let toast = document.getElementById('save-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'save-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.className = 'toast' + (isError ? ' toast-error' : ' toast-success');
+    toast.style.opacity = '1';
+    setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+}
+
+// Expand/collapse individual cards
+function setupExpandCollapse() {
+    const items = elements.list.querySelectorAll('.schedule-item');
+    items.forEach(item => {
+        // Click on card content (not drag handle) to toggle expand
+        const content = item.querySelector('.item-content');
+        if (content) {
+            content.addEventListener('click', (e) => {
+                // Don't toggle if clicking on inputs or buttons
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' ||
+                    e.target.closest('.title-option') || e.target.closest('.item-image-area')) {
+                    return;
+                }
+                item.classList.toggle('expanded');
+            });
+        }
+    });
 }
 
 function setupSortable() {
@@ -337,6 +386,90 @@ function linkify(text) {
 document.addEventListener('DOMContentLoaded', init);
 
 
+// Image upload handler
 window.triggerImageUpload = function (id) {
-    alert('Image upload coming soon! (ID: ' + id + ')');
-}
+    // Create a hidden file input
+    let fileInput = document.getElementById('header-image-input');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'header-image-input';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+    }
+
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        showToast('Uploading image...');
+
+        try {
+            const res = await fetch(`/api/scheduler/upload-image/${id}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                showToast('Image uploaded ✓');
+                // Update the item in state and re-render that card
+                const item = state.items.find(i => i.id === id);
+                if (item) {
+                    item.header_image = data.path;
+                    // Re-render just this card
+                    const cardEl = document.querySelector(`.schedule-item[data-id="${id}"]`);
+                    if (cardEl) {
+                        cardEl.outerHTML = createItemHtml(item);
+                        setupExpandCollapse();
+                    }
+                }
+            } else {
+                showToast('Upload failed!', true);
+            }
+        } catch (err) {
+            console.error('Upload error:', err);
+            showToast('Upload failed!', true);
+        }
+
+        fileInput.value = ''; // Reset for next upload
+    };
+
+    fileInput.click();
+};
+
+// Push item to Substack queue
+window.pushToSubstack = async function (id, event) {
+    event.stopPropagation(); // Don't trigger expand/collapse
+
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="icon">⏳</span> Pushing...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/scheduler/push-to-substack/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            showToast('Added to Substack queue ✓');
+            btn.innerHTML = '<span class="icon">✅</span> In Queue';
+        } else {
+            showToast('Push failed!', true);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (err) {
+        console.error('Push error:', err);
+        showToast('Push failed!', true);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
