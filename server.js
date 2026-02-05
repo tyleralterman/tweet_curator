@@ -11,6 +11,8 @@ const fs = require('fs');
 const multer = require('multer');
 const extractZip = require('extract-zip');
 const { execSync, spawn } = require('child_process');
+require('dotenv').config(); // Load env vars
+const { generateTitleOptions } = require('./utils/ai');
 
 // Optional: node-cron for Substack scheduling (only load if available)
 let cron;
@@ -958,6 +960,26 @@ app.post('/api/tweets/:id/tags', (req, res) => {
             INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source)
             VALUES (?, ?, 'manual')
         `).run(req.params.id, tag.id);
+
+        // 🤖 AUTO-GENERATE TITLES if tagging as 'blog-ready'
+        if (tagName.toLowerCase() === 'blog-ready') {
+            (async () => {
+                try {
+                    console.log(`🤖 Generating titles for tweet ${req.params.id}...`);
+                    const tweet = db.prepare('SELECT blog_text, full_text, combined_text FROM tweets WHERE id = ?').get(req.params.id);
+                    if (tweet) {
+                        const content = tweet.blog_text || cleanContent(tweet.combined_text || tweet.full_text);
+                        const options = await generateTitleOptions(content);
+                        if (options) {
+                            db.prepare('UPDATE tweets SET title_options = ? WHERE id = ?').run(JSON.stringify(options), req.params.id);
+                            console.log(`✅ Titles saved for ${req.params.id}`);
+                        }
+                    }
+                } catch (e) {
+                    console.error('❌ Title Gen Error:', e);
+                }
+            })(); // Fire and forget to avoid blocking UI
+        }
 
         res.json({ success: true });
     } catch (err) {
