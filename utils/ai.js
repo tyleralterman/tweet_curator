@@ -23,6 +23,7 @@ async function generateTitleOptions(text) {
     1. Return ONLY a JSON object with a key "options" containing an array.
     2. Each item in the array must have: "title", "subtitle", "source": "ai", and a unique "id" (e.g. "gen_1").
     3. Make them punchy and optimized for clicks.
+    4. Use SENTENCE CASE for titles: Only capitalize the first word and proper nouns. Example: "How to build a better future" NOT "How To Build A Better Future".
     
     Content:
     ${cleanText}
