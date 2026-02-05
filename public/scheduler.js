@@ -330,6 +330,8 @@ function linkify(text) {
     return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+document.addEventListener('DOMContentLoaded', init);
+
 window.triggerImageUpload = function (id) {
     alert('Image upload coming soon! (ID: ' + id + ')');
 }
