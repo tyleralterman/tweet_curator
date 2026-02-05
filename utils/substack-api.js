@@ -25,6 +25,9 @@ class SubstackAPI {
      */
     async request(method, path, body = null) {
         return new Promise((resolve, reject) => {
+            // URL-decode the session cookie if it contains encoded chars
+            const decodedCookie = decodeURIComponent(this.sessionCookie);
+
             const options = {
                 hostname: this.baseUrl,
                 port: 443,
@@ -32,8 +35,11 @@ class SubstackAPI {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Cookie': `substack.sid=${this.sessionCookie}`,
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                    'Cookie': `substack.sid=${decodedCookie}`,
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'application/json',
+                    'Origin': `https://${this.baseUrl}`,
+                    'Referer': `https://${this.baseUrl}/publish/posts`
                 }
             };
 
