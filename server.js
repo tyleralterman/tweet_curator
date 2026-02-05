@@ -164,6 +164,7 @@ try {
             status TEXT DEFAULT 'pending',
             posted_at TEXT,
             substack_url TEXT,
+            substack_post_id TEXT,
             error_message TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -1342,7 +1343,7 @@ app.post('/api/scheduler/upload-image/:id', headerUpload.single('image'), (req, 
 });
 
 // Push scheduler item to Substack blog queue
-app.post('/api/scheduler/push-to-substack/:id', (req, res) => {
+app.post('/api/scheduler/push-to-substack/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { scheduledAt } = req.body; // Optional scheduled date
@@ -1369,20 +1370,154 @@ app.post('/api/scheduler/push-to-substack/:id', (req, res) => {
         // Get body content
         const bodyContent = tweet.blog_text || cleanContent(tweet.combined_text || tweet.full_text);
 
-        // Check if already in queue
-        const existing = db.prepare('SELECT id FROM substack_blog_queue WHERE tweet_id = ? AND status = ?').get(id, 'pending');
-        if (existing) {
-            return res.json({ success: true, message: 'Already in queue', queueId: existing.id });
+        // Check if already scheduled on Substack
+        const existing = db.prepare('SELECT id, substack_post_id FROM substack_blog_queue WHERE tweet_id = ? AND status IN (?, ?)').get(id, 'scheduled', 'posted');
+        if (existing && existing.substack_post_id) {
+            return res.json({ success: true, message: 'Already scheduled on Substack', queueId: existing.id });
         }
 
-        // Insert into queue
-        const result = db.prepare(`
-            INSERT INTO substack_blog_queue (tweet_id, title, subtitle, header_image, body_content, scheduled_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).run(id, title, subtitle, tweet.header_image, bodyContent, scheduledAt || null);
+        // Initialize Substack API
+        const { SubstackAPI, formatArticleBody } = require('./utils/substack-api');
+        const sessionCookie = process.env.SUBSTACK_SESSION_COOKIE;
+        const publication = process.env.SUBSTACK_PUBLICATION || 'tyleralterman';
 
-        res.json({ success: true, queueId: result.lastInsertRowid });
+        if (!sessionCookie) {
+            // Fallback: just add to local queue without Substack scheduling
+            const pending = db.prepare('SELECT id FROM substack_blog_queue WHERE tweet_id = ? AND status = ?').get(id, 'pending');
+            if (pending) {
+                return res.json({ success: true, message: 'Already in queue (no API key)', queueId: pending.id });
+            }
+            const result = db.prepare(`
+                INSERT INTO substack_blog_queue (tweet_id, title, subtitle, header_image, body_content, status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
+            `).run(id, title, subtitle, tweet.header_image, bodyContent);
+            return res.json({ success: true, message: 'Added to local queue (set SUBSTACK_SESSION_COOKIE to enable API)', queueId: result.lastInsertRowid });
+        }
+
+        const api = new SubstackAPI(publication, sessionCookie);
+
+        // Get next available slot
+        const nextSlot = await api.getNextAvailableSlot();
+
+        // Format body with subscribe buttons
+        const formattedBody = formatArticleBody(bodyContent, publication);
+
+        // Create and schedule on Substack
+        const result = await api.createAndSchedule(title, subtitle, formattedBody, nextSlot, tweet.header_image);
+
+        // Store in local queue
+        const queueResult = db.prepare(`
+            INSERT INTO substack_blog_queue (tweet_id, title, subtitle, header_image, body_content, scheduled_at, status, substack_post_id)
+            VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?)
+        `).run(id, title, subtitle, tweet.header_image, bodyContent, nextSlot.toISOString(), result.draftId);
+
+        res.json({
+            success: true,
+            message: `Scheduled for ${nextSlot.toLocaleDateString()}`,
+            scheduledAt: nextSlot.toISOString(),
+            queueId: queueResult.lastInsertRowid,
+            substackPostId: result.draftId
+        });
     } catch (err) {
+        console.error('Push to Substack error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Batch schedule next month's posts
+app.post('/api/scheduler/batch-schedule', async (req, res) => {
+    try {
+        const { targetMonth, dryRun = false } = req.body; // e.g., "2026-03"
+
+        const { SubstackAPI, formatArticleBody } = require('./utils/substack-api');
+        const sessionCookie = process.env.SUBSTACK_SESSION_COOKIE;
+        const publication = process.env.SUBSTACK_PUBLICATION || 'tyleralterman';
+
+        if (!sessionCookie) {
+            return res.status(400).json({ error: 'SUBSTACK_SESSION_COOKIE not set' });
+        }
+
+        const api = new SubstackAPI(publication, sessionCookie);
+
+        // Get pending items from local queue, ordered by queue_order
+        const pendingItems = db.prepare(`
+            SELECT sbq.*, t.queue_order 
+            FROM substack_blog_queue sbq
+            JOIN tweets t ON sbq.tweet_id = t.id
+            WHERE sbq.status = 'pending'
+            ORDER BY t.queue_order ASC
+        `).all();
+
+        if (pendingItems.length === 0) {
+            return res.json({ success: true, message: 'No pending items to schedule', scheduled: [] });
+        }
+
+        // Get latest scheduled date from Substack
+        let nextSlot = await api.getNextAvailableSlot();
+
+        // If targetMonth is specified, start from that month
+        if (targetMonth) {
+            const [year, month] = targetMonth.split('-').map(Number);
+            const targetStart = new Date(year, month - 1, 1, 9, 0, 0);
+            if (targetStart > nextSlot) {
+                nextSlot = api.calculateNextSlot(targetStart);
+            }
+        }
+
+        const scheduled = [];
+        const errors = [];
+
+        for (const item of pendingItems) {
+            if (dryRun) {
+                scheduled.push({
+                    id: item.id,
+                    title: item.title,
+                    wouldScheduleAt: nextSlot.toISOString(),
+                    dryRun: true
+                });
+            } else {
+                try {
+                    const formattedBody = formatArticleBody(item.body_content, publication);
+                    const result = await api.createAndSchedule(
+                        item.title,
+                        item.subtitle,
+                        formattedBody,
+                        nextSlot,
+                        item.header_image
+                    );
+
+                    // Update local queue
+                    db.prepare(`
+                        UPDATE substack_blog_queue 
+                        SET scheduled_at = ?, status = 'scheduled', substack_post_id = ?
+                        WHERE id = ?
+                    `).run(nextSlot.toISOString(), result.draftId, item.id);
+
+                    scheduled.push({
+                        id: item.id,
+                        title: item.title,
+                        scheduledAt: nextSlot.toISOString(),
+                        substackPostId: result.draftId
+                    });
+                } catch (err) {
+                    errors.push({ id: item.id, title: item.title, error: err.message });
+                    continue;
+                }
+            }
+
+            // Calculate next slot
+            nextSlot = api.calculateNextSlot(nextSlot);
+        }
+
+        res.json({
+            success: true,
+            scheduled,
+            errors,
+            totalScheduled: scheduled.length,
+            totalErrors: errors.length
+        });
+    } catch (err) {
+        console.error('Batch schedule error:', err);
         res.status(500).json({ error: err.message });
     }
 });

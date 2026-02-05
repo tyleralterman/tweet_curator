@@ -459,16 +459,66 @@ window.pushToSubstack = async function (id, event) {
 
         if (res.ok) {
             const data = await res.json();
-            showToast('Added to Substack queue ✓');
-            btn.innerHTML = '<span class="icon">✅</span> In Queue';
+            const scheduledDate = data.scheduledAt ? new Date(data.scheduledAt).toLocaleDateString() : null;
+            const msg = scheduledDate ? `Scheduled for ${scheduledDate} ✓` : 'Added to queue ✓';
+            showToast(msg);
+            btn.innerHTML = scheduledDate
+                ? `<span class="icon">📅</span> ${scheduledDate}`
+                : '<span class="icon">✅</span> In Queue';
         } else {
-            showToast('Push failed!', true);
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.error || 'Push failed!', true);
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     } catch (err) {
         console.error('Push error:', err);
         showToast('Push failed!', true);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
+
+// Batch schedule next month's posts
+window.batchSchedule = async function () {
+    const btn = document.getElementById('batch-schedule-btn');
+    const originalText = btn.innerHTML;
+
+    // Calculate next month
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const targetMonth = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    const confirmed = confirm(`Schedule all pending items for ${nextMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}?\n\nThis will create drafts on Substack scheduled 2x/week (Sun + Wed).`);
+    if (!confirmed) return;
+
+    btn.innerHTML = '<span class="icon">⏳</span> Scheduling...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/scheduler/batch-schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetMonth })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            const msg = `Scheduled ${data.totalScheduled} posts! ${data.totalErrors > 0 ? `(${data.totalErrors} errors)` : ''}`;
+            showToast(msg);
+            btn.innerHTML = `<span class="icon">✅</span> ${data.totalScheduled} Scheduled`;
+
+            // Refresh the list to show updated statuses
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast(data.error || 'Batch scheduling failed!', true);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (err) {
+        console.error('Batch schedule error:', err);
+        showToast('Batch scheduling failed!', true);
         btn.innerHTML = originalText;
         btn.disabled = false;
     }

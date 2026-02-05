@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog Scheduler | Curator</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="scheduler.css?v=8">
+    <link rel="stylesheet" href="scheduler.css?v=9">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
 </head>
@@ -19,6 +19,9 @@
             <span class="badge" id="queue-count">0 items</span>
         </div>
         <div class="header-actions">
+            <button id="batch-schedule-btn" class="btn-substack-outline" onclick="batchSchedule()">
+                <span class="icon">📅</span> Schedule Next Month
+            </button>
             <button id="toggle-compact" class="btn-secondary">
                 <span class="icon">↕️</span> Minimize All
             </button>
@@ -36,7 +39,7 @@
         </div>
     </main>
 
-    <script src="scheduler.js?v=8"></script>
+    <script src="scheduler.js?v=9"></script>
 </body>
 
 </html>
