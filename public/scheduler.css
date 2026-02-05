@@ -1,21 +1,33 @@
 :root {
-    --bg-dark: #0f172a;
-    --bg-card: rgba(30, 41, 59, 0.7);
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --accent: #f472b6;
-    /* Pink */
-    --accent-hover: #db2777;
-    --accent-secondary: #60a5fa;
-    /* Blue */
-    --border: rgba(255, 255, 255, 0.1);
-    --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-    --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+    --bg-dark: #0f0c29;
+    --bg-card: rgba(255, 255, 255, 0.08);
+    /* Lighter glass */
+    --text-primary: #ffffff;
+    --text-secondary: #cbd5e1;
+
+    /* Vibrant Palette */
+    --accent: #ff00cc;
+    /* Neon Pink */
+    --accent-hover: #d103a8;
+    --accent-secondary: #333399;
+    /* Deep Purple */
+    --accent-tertiary: #00d4ff;
+    /* Cyan */
+
+    --border: rgba(255, 255, 255, 0.15);
+
+    /* Fun Background */
+    --gradient-bg: linear-gradient(135deg, #240b36 0%, #c31432 100%);
+    /* Wisteria -> Red gradient base, overlay below */
+    --gradient-fun: radial-gradient(circle at 20% 20%, #43cea2 0%, transparent 25%),
+        radial-gradient(circle at 80% 80%, #185a9d 0%, transparent 25%),
+        linear-gradient(135deg, #200122 0%, #6f0000 100%);
 }
 
 body {
-    background: var(--gradient-bg);
+    background: var(--gradient-fun);
     background-attachment: fixed;
+    background-size: cover;
     color: var(--text-primary);
     font-family: 'Outfit', sans-serif;
     margin: 0;
@@ -25,10 +37,10 @@ body {
 
 /* Glassmorphism Header */
 .app-header {
-    background: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
+    background: rgba(20, 10, 40, 0.6);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     position: fixed;
     top: 0;
     left: 0;
@@ -39,7 +51,6 @@ body {
     align-items: center;
     justify-content: space-between;
     z-index: 100;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
 .back-link {
@@ -47,35 +58,43 @@ body {
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
-    transition: color 0.2s;
+    transition: all 0.2s;
     display: flex;
     align-items: center;
     gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .back-link:hover {
-    color: var(--accent-secondary);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    transform: translateX(-2px);
 }
 
 .header-title h1 {
     margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-    background: linear-gradient(to right, #fff, #94a3b8);
+    font-size: 24px;
+    font-weight: 800;
+    background: linear-gradient(to right, #00d4ff, #ff00cc);
+    /* Cyan to Pink */
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
 }
 
 .badge {
-    background: rgba(96, 165, 250, 0.2);
-    color: #60a5fa;
-    padding: 4px 10px;
+    background: linear-gradient(90deg, #ff00cc, #333399);
+    color: white;
+    padding: 4px 12px;
     border-radius: 20px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     margin-left: 12px;
-    border: 1px solid rgba(96, 165, 250, 0.3);
+    box-shadow: 0 2px 10px rgba(255, 0, 204, 0.3);
+    border: none;
 }
 
 .header-actions {
@@ -96,106 +115,137 @@ body {
     gap: 16px;
 }
 
-/* Fun Cards */
+/* Cards */
 .schedule-item {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    background: rgba(20, 20, 40, 0.6);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
     padding: 20px;
     display: flex;
     gap: 20px;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
     overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Gradient left border */
+.schedule-item {
+    border-left: 4px solid transparent;
+    border-image: linear-gradient(to bottom, #00d4ff, #ff00cc);
+    border-image-slice: 1;
+    border-left-width: 4px;
+    /* Fallback */
+    border-left: 4px solid #ff00cc;
+    /* Fallback color */
+}
+
+/* Better Gradient Border Technique */
+.schedule-item::after {
+    /* Replacing border-image with a pseudo element for rounded corners compatibility if needed, 
+       but standard border-radius + overflow works for background. 
+       Let's use a simpler solid left for now to keep it clean. */
+    content: none;
+}
+
+.schedule-item {
+    border-left: none;
+    /* Reset */
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .schedule-item::before {
     content: '';
     position: absolute;
-    top: 0;
     left: 0;
-    width: 100%;
-    height: 4px;
-    /* Top accent bar */
-    background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
-    opacity: 0;
-    transition: opacity 0.2s;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(180deg, #00d4ff, #ff00cc);
 }
+
 
 .schedule-item:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.schedule-item:hover::before {
-    opacity: 1;
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    background: rgba(40, 40, 70, 0.7);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Dragging State */
 .schedule-item.sortable-drag {
-    background: rgba(30, 41, 59, 0.95);
-    border: 2px solid var(--accent);
+    background: #333399;
+    /* Deep Purple */
+    opacity: 0.9;
     cursor: grabbing;
+    transform: scale(1.05);
     z-index: 999;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
 }
 
-/* Date Blob */
+/* Date Blob - Increased Pop */
 .item-date {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-width: 80px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+    border-radius: 14px;
     padding: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
 }
 
 .date-day {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 800;
-    color: var(--accent);
+    background: linear-gradient(180deg, #fff, #e0e0e0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
     line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .date-month {
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 800;
     text-transform: uppercase;
-    color: var(--text-secondary);
+    color: #00d4ff;
+    /* Cyan */
     margin-top: 4px;
+    letter-spacing: 1px;
 }
 
 .date-year {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.4);
 }
 
 /* Content */
 .item-content {
     flex: 1;
     min-width: 0;
-    /* Flexbox text truncation fix */
 }
 
 .item-text {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.6;
-    color: #e2e8f0;
+    color: #f1f5f9;
     margin-bottom: 16px;
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* Title Input Area */
 .title-section {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     border-radius: 12px;
     padding: 16px;
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -203,34 +253,37 @@ body {
 
 .title-label {
     font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: var(--accent-secondary);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #ff00cc;
+    /* Neon Pink */
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     display: block;
 }
 
 .title-option {
-    padding: 8px;
-    border-radius: 8px;
+    padding: 10px;
+    border-radius: 10px;
     transition: background 0.2s;
     border: 1px solid transparent;
+    cursor: pointer;
 }
 
 .title-option:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .title-option input:checked+label {
-    color: var(--accent);
+    color: #00d4ff;
+    font-weight: 700;
 }
 
 .title-input {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 10px;
+    padding: 12px 14px;
     color: white;
     font-family: inherit;
     font-size: 14px;
@@ -240,23 +293,24 @@ body {
 
 .title-input:focus {
     outline: none;
-    border-color: var(--accent);
-    background: rgba(0, 0, 0, 0.5);
-    box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.2);
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
 }
 
-/* Buttons */
+/* Buttons with Gradients */
 .btn-primary {
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    background: linear-gradient(135deg, #00d4ff 0%, #005bea 100%);
     color: white;
     border: none;
-    padding: 10px 24px;
+    padding: 12px 28px;
     border-radius: 30px;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 14px;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(244, 114, 182, 0.4);
-    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(0, 91, 234, 0.4);
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .btn-primary:active {
@@ -265,40 +319,48 @@ body {
 
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(244, 114, 182, 0.5);
+    box-shadow: 0 8px 25px rgba(0, 91, 234, 0.6);
+    filter: brightness(1.1);
 }
 
 .btn-primary:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: not-allowed;
-    background: #334155;
+    background: #475569;
     box-shadow: none;
 }
 
 .btn-secondary {
     background: rgba(255, 255, 255, 0.1);
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 8px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px 24px;
     border-radius: 30px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.2s;
+    transition: all 0.3s;
 }
 
 .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
 }
 
-/* Compact Mode */
+/* Compact Mode - Adjusted for New Colors */
 .compact-mode .schedule-item {
     padding: 10px 20px;
     align-items: center;
-    min-height: auto;
+    background: rgba(20, 20, 40, 0.8);
+    /* Darker for legibility */
+}
+
+.compact-mode .schedule-item::before {
+    /* thin line for compact */
+    width: 4px;
 }
 
 .compact-mode .item-date {
@@ -308,25 +370,29 @@ body {
     padding: 0;
     background: none;
     border: none;
+    box-shadow: none;
     margin-right: 16px;
     gap: 8px;
 }
 
 .compact-mode .date-day {
-    font-size: 20px;
+    font-size: 18px;
+    background: none;
+    color: #ff00cc;
+    -webkit-text-fill-color: initial;
 }
 
 .compact-mode .date-month {
-    font-size: 14px;
+    font-size: 12px;
     margin-top: 0;
-    color: var(--text-secondary);
+    color: #00d4ff;
+    opacity: 0.8;
 }
 
 .compact-mode .date-year,
 .compact-mode .title-section,
 .compact-mode .item-image-area,
-.compact-mode .manual-title-inputs,
-.compact-mode .schedule-item::before {
+.compact-mode .manual-title-inputs {
     display: none !important;
 }
 
@@ -334,19 +400,25 @@ body {
     margin: 0;
     -webkit-line-clamp: 1;
     line-clamp: 1;
-    font-weight: 500;
+    font-weight: 600;
     color: white;
+    font-size: 14px;
 }
 
-/* Drag Handle */
-.drag-handle {
-    color: var(--text-secondary);
-    cursor: grab;
-    padding: 8px;
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 4px;
 }
 
-.drag-handle:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }

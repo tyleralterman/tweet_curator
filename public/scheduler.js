@@ -16,9 +16,13 @@ const START_DATE = new Date('2026-02-15T00:00:00');
 const INTERVAL_DAYS = 7;
 
 async function init() {
+    console.log('🚀 Scheduler v4 Initializing...');
+
     // Compact Mode Toggle
     const toggleBtn = document.getElementById('toggle-compact');
     const queueContainer = document.getElementById('scheduler-list');
+
+    console.log('Toggle:', toggleBtn, 'List:', queueContainer);
 
     if (toggleBtn && queueContainer) {
         toggleBtn.addEventListener('click', () => {
