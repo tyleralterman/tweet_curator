@@ -311,3 +311,148 @@ body {
     display: flex;
     flex-direction: column;
 }
+
+/* =========================================
+   COMPACT MODE
+   ========================================= */
+.compact-mode .schedule-item {
+    align-items: center;
+    padding: 8px 16px;
+    min-height: 48px;
+    gap: 12px;
+}
+
+.compact-mode .item-date {
+    flex-direction: row;
+    min-width: 60px;
+    gap: 6px;
+    border-right: none;
+    padding-right: 0;
+    margin-right: 0;
+    background: none;
+    box-shadow: none;
+}
+
+.compact-mode .date-day {
+    font-size: 16px;
+}
+
+.compact-mode .date-month {
+    font-size: 14px;
+}
+
+.compact-mode .date-year {
+    display: none;
+}
+
+.compact-mode .item-content {
+    display: flex;
+    align-items: center;
+}
+
+/* Hide elements in compact mode */
+.compact-mode .title-section,
+.compact-mode .item-image-area,
+.compact-mode .item-text p:not(:first-child),
+.compact-mode .manual-title-inputs {
+    display: none !important;
+}
+
+.compact-mode .item-text {
+    margin: 0;
+    -webkit-line-clamp: 1;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+
+/* =========================================
+   FUN DESIGN UPDATES
+   ========================================= */
+
+/* Card Styling */
+.schedule-item {
+    background: linear-gradient(145deg, #2d2d2d, #252525);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.schedule-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+    border-color: var(--accent);
+}
+
+/* Date Bubble */
+.item-date {
+    background: #202020;
+    border-radius: 8px;
+    padding: 12px;
+    margin-right: 8px;
+    border-right: 1px solid #333;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    min-width: 90px;
+}
+
+.date-day {
+    color: var(--accent);
+    font-size: 24px;
+    line-height: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Header Glassmorphism */
+.app-header {
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons */
+.btn-primary,
+.primary-btn {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    box-shadow: 0 4px 10px rgba(230, 126, 34, 0.3);
+    border-radius: 24px;
+    padding: 10px 24px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 6px 14px rgba(230, 126, 34, 0.4);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-radius: 24px;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Dragging visual */
+.schedule-item.sortable-drag {
+    transform: rotate(2deg) scale(1.02);
+    background: linear-gradient(145deg, #333, #2a2a2a);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    opacity: 0.95;
+    z-index: 9999 !important;
+    cursor: grabbing;
+}
