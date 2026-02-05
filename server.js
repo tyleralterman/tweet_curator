@@ -169,6 +169,14 @@ try {
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `);
+
+    // Migrate existing table to add substack_post_id column if missing
+    const queueColumns = db.pragma('table_info(substack_blog_queue)').map(c => c.name);
+    if (!queueColumns.includes('substack_post_id')) {
+        console.log('🔄 Adding substack_post_id column to substack_blog_queue...');
+        db.prepare('ALTER TABLE substack_blog_queue ADD COLUMN substack_post_id TEXT').run();
+        console.log('✅ substack_post_id column added');
+    }
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }

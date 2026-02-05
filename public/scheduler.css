@@ -16,12 +16,9 @@
 
     --border: rgba(255, 255, 255, 0.15);
 
-    /* Fun Background */
-    --gradient-bg: linear-gradient(135deg, #240b36 0%, #c31432 100%);
-    /* Wisteria -> Red gradient base, overlay below */
-    --gradient-fun: radial-gradient(circle at 20% 20%, #43cea2 0%, transparent 25%),
-        radial-gradient(circle at 80% 80%, #185a9d 0%, transparent 25%),
-        linear-gradient(135deg, #200122 0%, #6f0000 100%);
+    /* Monochrome Background for legibility */
+    --gradient-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+    --gradient-fun: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
 }
 
 body {
