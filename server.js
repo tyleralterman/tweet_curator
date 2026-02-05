@@ -467,6 +467,9 @@ app.get('/api/tweets', (req, res) => {
                 // Special handling: show tweets that START threads
                 // (tweets that have at least one child reply in our database)
                 conditions.push(`EXISTS (SELECT 1 FROM tweets child WHERE child.in_reply_to_tweet_id = t.id)`);
+            } else if (type === 'no_media') {
+                // Filter for tweets with no images/media
+                conditions.push(`(t.media_url IS NULL OR t.media_url = '')`);
             } else {
                 conditions.push(`t.tweet_type = ?`);
                 params.push(type);

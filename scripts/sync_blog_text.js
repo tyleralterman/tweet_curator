@@ -50,15 +50,12 @@ async function patchTweet(tweetId, blogText) {
 async function syncBlogText() {
     console.log('🔄 Syncing blog_text to Render...\n');
 
-    // Get all tweets with blog_text
+    // Get ALL tweets with blog_text (not just specific tags)
     const tweets = db.prepare(`
-        SELECT DISTINCT t.id, t.blog_text
-        FROM tweets t
-        JOIN tweet_tags tt ON t.id = tt.tweet_id
-        JOIN tags tag ON tt.tag_id = tag.id
-        WHERE tag.name IN ('blog-post', 'blog-candidate', 'blog-ready')
-        AND t.blog_text IS NOT NULL
-        AND t.blog_text != ''
+        SELECT id, blog_text
+        FROM tweets
+        WHERE blog_text IS NOT NULL
+        AND blog_text != ''
     `).all();
 
     console.log(`Found ${tweets.length} tweets with blog_text to sync.\n`);
