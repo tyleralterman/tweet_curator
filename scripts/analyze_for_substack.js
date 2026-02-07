@@ -3,7 +3,7 @@
  * Analyze tweets for Substack posting and apply appropriate tags
  * 
  * Tags applied:
- * - substack-ready: Clean, ready to auto-post
+ * - broadcast-ready: Clean, ready to auto-post
  * - substack-review: Has issues to review (mentions, hashtags, etc.)
  * - substack-manual: Can't auto-post (media, quotes, truncated, threads)
  * - truncated: Text ends with … (incomplete)
@@ -100,7 +100,7 @@ function detectIssues(tweet) {
 console.log('\n🔍 Analyzing tweets for Substack...\n');
 
 // Ensure tags exist
-const readyTagId = ensureTag('substack-ready', 'use');
+const readyTagId = ensureTag('broadcast-ready', 'use');
 const reviewTagId = ensureTag('substack-review', 'use');
 const manualTagId = ensureTag('substack-manual', 'use');
 const truncatedTagId = ensureTag('truncated', 'use');

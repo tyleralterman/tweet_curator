@@ -7,7 +7,7 @@
  * 2. Saves screenshot to media/ folder
  * 3. Updates tweet's media_url to point to screenshot
  * 4. Creates combined text in Notes field
- * 5. Moves from substack-manual → substack-ready
+ * 5. Moves from substack-manual → broadcast-ready
  * 
  * Usage:
  *   node screenshot_quotes.js           # Process all quote tweets
@@ -130,7 +130,7 @@ async function main() {
     });
 
     const stats = { processed: 0, failed: 0, skipped: 0 };
-    const readyTagId = db.prepare("SELECT id FROM tags WHERE name = 'substack-ready'").get()?.id;
+    const readyTagId = db.prepare("SELECT id FROM tags WHERE name = 'broadcast-ready'").get()?.id;
     const manualTagId = db.prepare("SELECT id FROM tags WHERE name = 'substack-manual'").get()?.id;
 
     for (const tweet of quoteTweets) {
@@ -172,13 +172,13 @@ async function main() {
                 WHERE id = ?
             `).run(screenshotPath, `[QUOTE SCREENSHOT]\n\n${combinedText}`, tweet.id);
 
-            // Move to substack-ready if we have readyTagId
+            // Move to broadcast-ready if we have readyTagId
             if (readyTagId && manualTagId) {
                 db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(tweet.id, manualTagId);
                 db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(tweet.id, readyTagId, 'ai');
             }
 
-            console.log(`   ✅ Updated and promoted to substack-ready`);
+            console.log(`   ✅ Updated and promoted to broadcast-ready`);
             stats.processed++;
 
         } catch (error) {

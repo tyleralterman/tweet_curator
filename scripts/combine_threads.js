@@ -46,7 +46,7 @@ let combined = 0;
 let readyPromoted = 0;
 
 // Ready tag for clean threads
-const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('substack-ready')?.id;
+const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
 
 for (const starter of threadStarters) {
     // Recursively get all parts of this thread

@@ -2,7 +2,12 @@
  * Substack Internal API Client
  * 
  * Uses Substack's internal (unofficial) API to create and schedule posts.
- * Authentication via session cookie (substack.sid) + CSRF token.
+ * Authentication via session cookie (substack.sid).
+ * 
+ * Based on actual network traffic analysis from browser debugging:
+ * - NO CSRF token is required
+ * - Origin/Referer headers are strictly validated
+ * - Cookie-based authentication is sufficient
  * 
  * Environment variables:
  * - SUBSTACK_SESSION_COOKIE: The substack.sid cookie value
@@ -15,82 +20,39 @@ const https = require('https');
 class SubstackAPI {
     constructor(publication, sessionCookie, customDomain = null) {
         this.publication = publication;
-        this.sessionCookie = decodeURIComponent(sessionCookie);
+        // URL-decode the session cookie if needed
+        this.sessionCookie = sessionCookie.includes('%')
+            ? decodeURIComponent(sessionCookie)
+            : sessionCookie;
         // Use custom domain if provided, otherwise use substack.com subdomain
         this.baseUrl = customDomain || `${publication}.substack.com`;
-        this.csrfToken = null;
-    }
 
-    /**
-     * Fetch a page and extract CSRF token from it
-     */
-    async fetchCsrfToken() {
-        return new Promise((resolve, reject) => {
-            const options = {
-                hostname: this.baseUrl,
-                port: 443,
-                path: '/publish/post',
-                method: 'GET',
-                headers: {
-                    'Cookie': `substack.sid=${this.sessionCookie}`,
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-                }
-            };
-
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    // Extract CSRF token from page
-                    // Look for window.analytics_config or __NEXT_DATA__
-                    const csrfMatch = data.match(/"csrfToken":"([^"]+)"/);
-                    if (csrfMatch) {
-                        this.csrfToken = csrfMatch[1];
-                        console.log('✅ CSRF token extracted');
-                        resolve(this.csrfToken);
-                    } else {
-                        // Try alternate patterns
-                        const altMatch = data.match(/csrf[_-]?token['"]\s*[:=]\s*['"]([^'"]+)['"]/i);
-                        if (altMatch) {
-                            this.csrfToken = altMatch[1];
-                            console.log('✅ CSRF token extracted (alt pattern)');
-                            resolve(this.csrfToken);
-                        } else {
-                            console.warn('⚠️ Could not find CSRF token in page');
-                            resolve(null);
-                        }
-                    }
-                });
-            });
-
-            req.on('error', reject);
-            req.end();
-        });
+        console.log(`🔌 SubstackAPI initialized: ${this.baseUrl}`);
     }
 
     /**
      * Make authenticated request to Substack API
+     * Replicates exact browser request structure based on traffic analysis
      */
     async request(method, path, body = null) {
-        // Fetch CSRF token if we don't have one and this is a write operation
-        if (!this.csrfToken && method !== 'GET') {
-            await this.fetchCsrfToken();
-        }
-
         return new Promise((resolve, reject) => {
+            // Headers exactly as captured from browser network traffic
             const headers = {
                 'Content-Type': 'application/json',
-                'Cookie': `substack.sid=${this.sessionCookie}`,
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json',
+                'Cookie': `connect.sid=${this.sessionCookie}`,
                 'Origin': `https://${this.baseUrl}`,
-                'Referer': `https://${this.baseUrl}/publish/post`
+                'Referer': `https://${this.baseUrl}/publish/post/`,
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Site': 'same-origin',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Dest': 'empty'
             };
 
-            // Add CSRF token if we have one
-            if (this.csrfToken) {
-                headers['x-csrf-token'] = this.csrfToken;
+            if (body) {
+                headers['Content-Length'] = Buffer.byteLength(JSON.stringify(body));
             }
 
             const options = {
@@ -101,10 +63,14 @@ class SubstackAPI {
                 headers: headers
             };
 
+            console.log(`📡 ${method} https://${this.baseUrl}${path}`);
+
             const req = https.request(options, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
+                    console.log(`📥 Response: ${res.statusCode}`);
+
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         try {
                             resolve(JSON.parse(data));
@@ -112,13 +78,17 @@ class SubstackAPI {
                             resolve(data);
                         }
                     } else {
-                        console.error(`Substack API Error: ${res.statusCode}`, data.substring(0, 500));
+                        console.error(`❌ Substack API Error: ${res.statusCode}`);
+                        console.error(`Response: ${data.substring(0, 500)}`);
                         reject(new Error(`API Error: ${res.statusCode} - ${data.substring(0, 200)}`));
                     }
                 });
             });
 
-            req.on('error', reject);
+            req.on('error', (e) => {
+                console.error(`❌ Request error: ${e.message}`);
+                reject(e);
+            });
 
             if (body) {
                 req.write(JSON.stringify(body));
@@ -136,6 +106,19 @@ class SubstackAPI {
             return response.posts || response || [];
         } catch (e) {
             console.error('Failed to get scheduled posts:', e.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get drafts list
+     */
+    async getDrafts() {
+        try {
+            const response = await this.request('GET', '/api/v1/drafts?limit=100');
+            return response.drafts || response || [];
+        } catch (e) {
+            console.error('Failed to get drafts:', e.message);
             return [];
         }
     }
@@ -162,16 +145,24 @@ class SubstackAPI {
     }
 
     /**
-     * Create a draft post
+     * Create a new draft post
+     * Based on actual Substack API structure
      */
     async createDraft(title, subtitle, bodyHtml, coverImageUrl = null) {
         const payload = {
-            title: title,
-            subtitle: subtitle || '',
-            body_html: bodyHtml,
+            draft_title: title,
+            draft_subtitle: subtitle || '',
+            draft_body: JSON.stringify({
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        content: [{ type: 'text', text: bodyHtml }]
+                    }
+                ]
+            }),
             type: 'newsletter',
-            audience: 'everyone',
-            draft: true
+            audience: 'everyone'
         };
 
         if (coverImageUrl) {
@@ -189,34 +180,36 @@ class SubstackAPI {
     }
 
     /**
+     * Update an existing draft
+     */
+    async updateDraft(draftId, updates) {
+        try {
+            const response = await this.request('PUT', `/api/v1/drafts/${draftId}`, updates);
+            console.log(`✅ Updated draft: ${draftId}`);
+            return response;
+        } catch (e) {
+            console.error('Failed to update draft:', e.message);
+            throw e;
+        }
+    }
+
+    /**
      * Schedule a draft for publishing
      */
     async scheduleDraft(draftId, scheduledDate) {
         const payload = {
-            draft_id: draftId,
-            scheduled_for: scheduledDate.toISOString(),
-            send_email: true,
-            publish_to_web: true
+            post_date: scheduledDate.toISOString(),
+            audience: 'everyone'
         };
 
         try {
-            const response = await this.request('POST', `/api/v1/drafts/${draftId}/schedule`, payload);
+            // Use PUT to update the draft with a scheduled date
+            const response = await this.request('PUT', `/api/v1/drafts/${draftId}`, payload);
             console.log(`✅ Scheduled post for: ${scheduledDate.toISOString()}`);
             return response;
         } catch (e) {
-            // Try alternative endpoint format
-            try {
-                const altPayload = {
-                    post_date: scheduledDate.toISOString(),
-                    audience: 'everyone'
-                };
-                const response = await this.request('PUT', `/api/v1/drafts/${draftId}`, altPayload);
-                console.log(`✅ Updated draft with schedule: ${scheduledDate.toISOString()}`);
-                return response;
-            } catch (e2) {
-                console.error('Failed to schedule draft:', e2.message);
-                throw e2;
-            }
+            console.error('Failed to schedule draft:', e.message);
+            throw e;
         }
     }
 
@@ -272,6 +265,20 @@ class SubstackAPI {
     async getNextAvailableSlot() {
         const latestDate = await this.getLatestScheduledDate();
         return this.calculateNextSlot(latestDate);
+    }
+
+    /**
+     * Test the connection by fetching drafts
+     */
+    async testConnection() {
+        try {
+            const drafts = await this.getDrafts();
+            console.log(`✅ Connection test passed! Found ${drafts.length} drafts`);
+            return true;
+        } catch (e) {
+            console.error(`❌ Connection test failed: ${e.message}`);
+            return false;
+        }
     }
 }
 

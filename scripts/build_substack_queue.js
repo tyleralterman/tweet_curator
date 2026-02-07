@@ -43,10 +43,10 @@ const START_DATE = process.env.START_DATE || '2026-02-06'; // Configurable start
 
 console.log('\n📋 Building posting queue...\n');
 
-// Get substack-ready tag ID
-const readyTag = db.prepare("SELECT id FROM tags WHERE name = 'substack-ready'").get();
+// Get broadcast-ready tag ID
+const readyTag = db.prepare("SELECT id FROM tags WHERE name = 'broadcast-ready'").get();
 if (!readyTag) {
-    console.log('❌ No substack-ready tag found. Run analyze_for_substack.js first.');
+    console.log('❌ No broadcast-ready tag found. Run analyze_for_substack.js first.');
     process.exit(1);
 }
 

@@ -1,0 +1,383 @@
+/* Notes Queue - Additional Styles */
+
+/* Platform Panel */
+.platform-panel {
+    background: rgba(20, 20, 40, 0.6);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.platform-panel h2 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.platform-toggles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.platform-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.platform-card:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.platform-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.platform-icon {
+    font-size: 28px;
+    width: 40px;
+    text-align: center;
+}
+
+.platform-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.platform-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.platform-method {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.platform-status {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.platform-status.ready {
+    background: rgba(0, 212, 255, 0.2);
+    color: #00d4ff;
+}
+
+.platform-status.connected {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+}
+
+.platform-status.error {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+/* Schedule Options */
+.schedule-options {
+    background: rgba(20, 20, 40, 0.6);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.schedule-options h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.options-grid {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.option-group label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.option-group select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: white;
+    font-size: 14px;
+    font-family: 'Outfit', sans-serif;
+    cursor: pointer;
+    min-width: 100px;
+}
+
+.option-group select:focus {
+    outline: none;
+    border-color: #00d4ff;
+}
+
+.schedule-preview {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Queue Section */
+.queue-section {
+    background: rgba(20, 20, 40, 0.4);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 24px;
+}
+
+.queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.queue-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.queue-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Note Item */
+.note-item {
+    background: rgba(30, 30, 50, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: all 0.3s ease;
+    cursor: grab;
+}
+
+.note-item:active {
+    cursor: grabbing;
+}
+
+.note-item:hover {
+    background: rgba(40, 40, 60, 0.9);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.note-item.sortable-ghost {
+    opacity: 0.4;
+}
+
+.note-item.sortable-drag {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.note-order {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #00d4ff, #ff00cc);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.note-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.note-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.note-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.note-char-count {
+    display: flex;
+    gap: 4px;
+}
+
+.note-char-count.warning {
+    color: #ffcc00;
+}
+
+.note-char-count.error {
+    color: #ff6464;
+}
+
+.note-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.note-actions button {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.note-actions button:hover {
+    background: rgba(255, 100, 100, 0.3);
+}
+
+/* Buttons */
+.btn-substack {
+    background: linear-gradient(135deg, #ff6719, #ff8c00);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-substack:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(255, 103, 25, 0.4);
+}
+
+.btn-bluesky {
+    background: linear-gradient(135deg, #0085ff, #00d4ff);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-bluesky:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 133, 255, 0.4);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 30, 50, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px 24px;
+    font-size: 14px;
+    color: white;
+    transition: bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 1000;
+    max-width: 400px;
+}
+
+.toast.show {
+    bottom: 30px;
+}
+
+.toast.success {
+    border-color: #00ff88;
+}
+
+.toast.error {
+    border-color: #ff6464;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}

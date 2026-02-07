@@ -9,6 +9,7 @@
     "postinstall": "npx puppeteer browsers install chrome"
   },
   "dependencies": {
+    "@atproto/api": "^0.18.20",
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -16,6 +17,7 @@
     "extract-zip": "^2.0.1",
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
-    "puppeteer": "^22.15.0"
+    "puppeteer": "^22.15.0",
+    "substack-api": "^2.2.1"
   }
 }

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes Queue | Chimera Broadcast</title>
+    <link rel="stylesheet" href="scheduler.css">
+    <link rel="stylesheet" href="notes-queue.css?v=1">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+</head>
+
+<body>
+    <header class="app-header">
+        <a href="/" class="back-link">← Dashboard</a>
+        <div class="header-title">
+            <h1>📡 Notes Queue</h1>
+            <span class="badge" id="queue-count">0 notes</span>
+        </div>
+        <div class="header-actions">
+            <button id="export-yaml-btn" class="btn-substack" onclick="exportYAML()">
+                <span class="icon">📥</span> Export for Substack
+            </button>
+            <button id="post-bluesky-btn" class="btn-bluesky" onclick="postToBluesky()">
+                <span class="icon">🦋</span> Post to Bluesky
+            </button>
+        </div>
+    </header>
+
+    <main class="scheduler-container">
+        <!-- Platform Status Panel -->
+        <div class="platform-panel">
+            <h2>Broadcast Platforms</h2>
+            <div class="platform-toggles">
+                <div class="platform-card" data-platform="substack">
+                    <div class="platform-icon">📝</div>
+                    <div class="platform-info">
+                        <span class="platform-name">Substack Notes</span>
+                        <span class="platform-method">YAML Export → Finn Tropy</span>
+                    </div>
+                    <div class="platform-status ready">Ready</div>
+                </div>
+                <div class="platform-card" data-platform="bluesky">
+                    <div class="platform-icon">🦋</div>
+                    <div class="platform-info">
+                        <span class="platform-name">Bluesky</span>
+                        <span class="platform-method">API Direct Post</span>
+                    </div>
+                    <div class="platform-status" id="bluesky-status">Checking...</div>
+                </div>
+                <div class="platform-card disabled" data-platform="linkedin">
+                    <div class="platform-icon">💼</div>
+                    <div class="platform-info">
+                        <span class="platform-name">LinkedIn</span>
+                        <span class="platform-method">Coming Soon</span>
+                    </div>
+                    <div class="platform-status">Not Connected</div>
+                </div>
+                <div class="platform-card disabled" data-platform="threads">
+                    <div class="platform-icon">🧵</div>
+                    <div class="platform-info">
+                        <span class="platform-name">Threads</span>
+                        <span class="platform-method">Coming Soon</span>
+                    </div>
+                    <div class="platform-status">Not Connected</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduling Options -->
+        <div class="schedule-options">
+            <h3>📅 Scheduling Options</h3>
+            <div class="options-grid">
+                <div class="option-group">
+                    <label for="start-days">Start in</label>
+                    <select id="start-days">
+                        <option value="1">Tomorrow</option>
+                        <option value="2">2 days</option>
+                        <option value="7">1 week</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="notes-per-day">Notes/day</label>
+                    <select id="notes-per-day">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="hours-start">First slot</label>
+                    <select id="hours-start">
+                        <option value="7">7 AM</option>
+                        <option value="8">8 AM</option>
+                        <option value="9" selected>9 AM</option>
+                        <option value="10">10 AM</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="hours-end">Last slot</label>
+                    <select id="hours-end">
+                        <option value="18">6 PM</option>
+                        <option value="20">8 PM</option>
+                        <option value="21" selected>9 PM</option>
+                        <option value="23">11 PM</option>
+                    </select>
+                </div>
+            </div>
+            <div class="schedule-preview" id="schedule-preview">
+                <!-- Preview will be populated by JS -->
+            </div>
+        </div>
+
+        <!-- Notes Queue List -->
+        <div class="queue-section">
+            <div class="queue-header">
+                <h3>📋 Queue</h3>
+                <span class="queue-hint">Drag to reorder • Click to preview</span>
+            </div>
+            <div id="notes-list" class="notes-list">
+                <div class="loading">Loading notes...</div>
+            </div>
+            <div class="empty-state" id="empty-state" style="display: none;">
+                <div class="empty-icon">📭</div>
+                <p>No notes in queue</p>
+                <a href="/swipe.html" class="btn-primary">Add from Swipe Interface</a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+
+    <script src="notes-queue.js?v=1"></script>
+</body>
+
+</html>

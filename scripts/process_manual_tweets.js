@@ -82,7 +82,7 @@ const stats = {
 };
 
 // Ready tag for promoting self-quotes
-const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('substack-ready')?.id;
+const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
 const manualTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('substack-manual')?.id;
 
 for (const tweet of manualTweets) {
@@ -162,10 +162,10 @@ const readyCount = db.prepare(`
     SELECT COUNT(*) as count FROM tweets t
     JOIN tweet_tags tt ON t.id = tt.tweet_id
     JOIN tags tg ON tt.tag_id = tg.id
-    WHERE tg.name = 'substack-ready'
+    WHERE tg.name = 'broadcast-ready'
 `).get();
 
-console.log(`\n📈 Total substack-ready: ${readyCount.count}`);
+console.log(`\n📈 Total broadcast-ready: ${readyCount.count}`);
 
 db.close();
 console.log('\n✨ Processing complete!');

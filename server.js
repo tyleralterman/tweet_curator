@@ -1546,8 +1546,296 @@ app.get('/api/substack/queue', (req, res) => {
 });
 
 // ============================================
+// Notes Queue & Finn Tropy YAML Export
+// ============================================
+
+const yaml = require('js-yaml');
+
+// Get Notes queue (tweets tagged 'broadcast-ready' for Substack Notes)
+app.get('/api/notes/queue', (req, res) => {
+    try {
+        // First ensure the 'broadcast-ready' tag exists
+        db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-ready', 'use');
+
+        const query = `
+            SELECT t.id, t.full_text, t.combined_text, t.created_at, t.queue_order, t.media_url
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'broadcast-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+        `;
+        const tweets = db.prepare(query).all();
+
+        // Clean the text
+        tweets.forEach(t => {
+            t.cleaned_text = cleanContent(t.combined_text || t.full_text);
+        });
+
+        res.json(tweets);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Add tweet to Notes queue (tag as 'broadcast-ready')
+app.post('/api/notes/add/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Ensure tag exists
+        db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-ready', 'use');
+        const tagRow = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready');
+
+        // Add tag to tweet
+        db.prepare('INSERT OR IGNORE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(id, tagRow.id, 'manual');
+
+        res.json({ success: true, message: 'Added to Notes queue' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Remove tweet from Notes queue
+app.delete('/api/notes/remove/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const tagRow = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready');
+
+        if (tagRow) {
+            db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(id, tagRow.id);
+        }
+
+        res.json({ success: true, message: 'Removed from Notes queue' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export Notes queue as YAML for Finn Tropy's Substack Scheduled Notes extension
+app.get('/api/notes/export-yaml', (req, res) => {
+    try {
+        // Get the days offset for scheduling (default: start tomorrow)
+        const startDaysOffset = parseInt(req.query.startDays) || 1;
+        const notesPerDay = parseInt(req.query.perDay) || 3;
+        const hoursStart = parseInt(req.query.hoursStart) || 9;  // 9 AM
+        const hoursEnd = parseInt(req.query.hoursEnd) || 21;     // 9 PM
+
+        // Get notes from queue
+        const query = `
+            SELECT t.id, t.full_text, t.combined_text, t.created_at
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'broadcast-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+        `;
+        const tweets = db.prepare(query).all();
+
+        if (tweets.length === 0) {
+            return res.status(400).json({
+                error: 'No notes in queue. Add tweets to the Notes queue first.'
+            });
+        }
+
+        // Generate scheduled dates
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setDate(startDate.getDate() + startDaysOffset);
+        startDate.setHours(hoursStart, 0, 0, 0);
+
+        // Calculate time slots evenly distributed across the day
+        const hoursRange = hoursEnd - hoursStart;
+        const slotInterval = hoursRange / notesPerDay;
+
+        // Build Finn Tropy YAML format
+        const scheduledNotes = tweets.map((tweet, index) => {
+            const dayOffset = Math.floor(index / notesPerDay);
+            const slotInDay = index % notesPerDay;
+
+            const scheduledDate = new Date(startDate);
+            scheduledDate.setDate(scheduledDate.getDate() + dayOffset);
+            scheduledDate.setHours(hoursStart + Math.floor(slotInDay * slotInterval), 0, 0, 0);
+
+            // Format: YYYY-MM-DDTHH:mm (without seconds)
+            const scheduledAt = scheduledDate.toISOString().slice(0, 16);
+
+            const text = cleanContent(tweet.combined_text || tweet.full_text);
+            const timestamp = Date.now();
+            const randomSuffix = Math.random().toString(36).substring(2, 15);
+
+            return {
+                airtableId: null,
+                content: {
+                    delta: { ops: [{ insert: text + '\n' }] },
+                    json: {
+                        attachmentIds: [],
+                        bodyJson: {
+                            attrs: { schemaVersion: 'v1' },
+                            content: [{ content: [{ text: text, type: 'text' }], type: 'paragraph' }],
+                            type: 'doc'
+                        },
+                        replyMinimumRole: 'everyone'
+                    },
+                    text: text
+                },
+                createdAt: new Date().toISOString(),
+                id: `${timestamp}_${randomSuffix}`,
+                images: [],
+                link: '',
+                metadata: { tabId: 0, tabUrl: 'https://lalachimera.com/publish/posts/published' },
+                metrics: {},
+                scheduledAt: scheduledAt,
+                status: 'draft',
+                substack_id: null,
+                title: text.length > 100 ? text.substring(0, 100) + '...' : text,
+                updatedAt: new Date().toISOString(),
+                version: '1.4.3'
+            };
+        });
+
+        const yamlContent = yaml.dump(scheduledNotes, { lineWidth: -1, quotingType: "'", forceQuotes: false });
+
+        res.setHeader('Content-Type', 'application/x-yaml');
+        res.setHeader('Content-Disposition', `attachment; filename="scheduledNotes_${new Date().toISOString().slice(0, 10)}.yaml"`);
+        res.send(yamlContent);
+
+    } catch (err) {
+        console.error('YAML export error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Preview Notes export (JSON for debugging)
+app.get('/api/notes/preview-export', (req, res) => {
+    try {
+        const startDaysOffset = parseInt(req.query.startDays) || 1;
+        const notesPerDay = parseInt(req.query.perDay) || 3;
+
+        const query = `
+            SELECT t.id, t.full_text, t.combined_text, t.created_at
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'broadcast-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+            LIMIT 10
+        `;
+        const tweets = db.prepare(query).all();
+
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setDate(startDate.getDate() + startDaysOffset);
+
+        const preview = tweets.map((tweet, i) => {
+            const dayOffset = Math.floor(i / notesPerDay);
+            const slotInDay = i % notesPerDay;
+            const scheduledDate = new Date(startDate);
+            scheduledDate.setDate(scheduledDate.getDate() + dayOffset);
+            scheduledDate.setHours(9 + slotInDay * 4, 0, 0, 0);
+
+            return {
+                text: cleanContent(tweet.combined_text || tweet.full_text).substring(0, 100) + '...',
+                scheduledAt: scheduledDate.toISOString().slice(0, 16),
+                dayNumber: dayOffset + 1,
+                slotInDay: slotInDay + 1
+            };
+        });
+
+        res.json({
+            totalNotes: tweets.length,
+            startDate: startDate.toISOString().slice(0, 10),
+            notesPerDay,
+            daysNeeded: Math.ceil(tweets.length / notesPerDay),
+            preview
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// Broadcast Engine - Platform APIs
+// ============================================
+
+const BlueskyAPI = require('./utils/bluesky-api');
+
+// Test Bluesky connection
+app.get('/api/broadcast/bluesky/test', async (req, res) => {
+    try {
+        const api = new BlueskyAPI();
+        const result = await api.testConnection();
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Post a single tweet to Bluesky
+app.post('/api/broadcast/bluesky/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get the tweet
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) {
+            return res.status(404).json({ error: 'Tweet not found' });
+        }
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+
+        const api = new BlueskyAPI();
+        const result = await api.post(text);
+
+        res.json(result);
+    } catch (err) {
+        console.error('Bluesky post error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Post entire Notes queue to Bluesky with delays
+app.post('/api/broadcast/bluesky/batch', async (req, res) => {
+    try {
+        const delayMs = parseInt(req.query.delay) || 60000; // Default 1 minute between posts
+
+        // Get notes from queue
+        const tweets = db.prepare(`
+            SELECT t.id, t.full_text, t.combined_text, t.blog_text
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'broadcast-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+        `).all();
+
+        if (tweets.length === 0) {
+            return res.status(400).json({ error: 'No notes in queue' });
+        }
+
+        const texts = tweets.map(t => cleanContent(t.blog_text || t.combined_text || t.full_text));
+
+        const api = new BlueskyAPI();
+        const results = await api.postBatch(texts, delayMs);
+
+        res.json({
+            success: true,
+            total: results.length,
+            successful: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length,
+            results
+        });
+    } catch (err) {
+        console.error('Bluesky batch error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
 // Static Files & Catch-all
 // ============================================
+
+
 
 // Get quoted tweet content - first checks DB, then fetches from Twitter
 app.get('/api/quoted-tweet/:id', async (req, res) => {
