@@ -2328,6 +2328,77 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// Broadcast custom text (from Chrome Extension) to platforms
+app.post('/api/broadcast/custom', async (req, res) => {
+    try {
+        const { text, platforms } = req.body;
+        if (!text || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'text string and platforms array required' });
+        }
+
+        const results = {};
+
+        for (const platform of platforms) {
+            try {
+                switch (platform) {
+                    case 'bluesky': {
+                        const api = new BlueskyAPI();
+                        let result;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                result = await api.post(text);
+                                break;
+                            } catch (retryErr) {
+                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                    await new Promise(r => setTimeout(r, attempt * 3000));
+                                    api.resetLogin();
+                                    continue;
+                                }
+                                throw retryErr;
+                            }
+                        }
+                        results.bluesky = { success: true, uri: result.uri };
+                        break;
+                    }
+                    case 'linkedin': {
+                        const api = new LinkedInAPI();
+                        const result = await api.createPost(text);
+                        results.linkedin = { success: true, postId: result.id };
+                        break;
+                    }
+                    case 'threads': {
+                        let threadText = text;
+                        if (threadText.length > 500) {
+                            threadText = threadText.substring(0, 497) + '...';
+                        }
+                        const api = new ThreadsAPI();
+                        await api.getProfile();
+                        const result = await api.createPost(threadText);
+                        results.threads = { success: true, postId: result.postId };
+                        break;
+                    }
+                    default:
+                        results[platform] = { success: false, error: 'Unknown platform' };
+                }
+            } catch (err) {
+                console.error(`Custom broadcast to ${platform} failed:`, err.message);
+                results[platform] = { success: false, error: err.message };
+            }
+        }
+
+        const successCount = Object.values(results).filter(r => r.success).length;
+        res.json({
+            success: successCount > 0,
+            total: platforms.length,
+            successful: successCount,
+            failed: platforms.length - successCount,
+            results
+        });
+    } catch (err) {
+        console.error('Custom broadcast error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Batch broadcast entire queue to selected platforms
 app.post('/api/broadcast/multi/batch', async (req, res) => {
