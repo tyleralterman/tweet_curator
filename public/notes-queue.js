@@ -72,12 +72,13 @@ async function checkAllPlatforms() {
                 statusEl.className = 'platform-status connected';
                 if (cardEl) cardEl.classList.add('connected');
                 if (cardEl) cardEl.classList.remove('disconnected');
+                if (toggleEl) { toggleEl.checked = true; toggleEl.disabled = false; }
             } else {
                 statusEl.textContent = 'Disconnected';
                 statusEl.className = 'platform-status error';
                 if (cardEl) cardEl.classList.add('disconnected');
                 if (cardEl) cardEl.classList.remove('connected');
-                if (toggleEl) toggleEl.checked = false;
+                if (toggleEl) { toggleEl.checked = false; toggleEl.disabled = true; }
             }
         }
     } catch (err) {

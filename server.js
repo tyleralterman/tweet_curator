@@ -191,6 +191,24 @@ try {
         )
     `);
     console.log('✅ broadcast_history table ready');
+
+    // Migrate old 'substack-ready' tag to 'broadcast-ready'
+    const oldTag = db.prepare("SELECT id FROM tags WHERE name = 'substack-ready'").get();
+    if (oldTag) {
+        const newTag = db.prepare("SELECT id FROM tags WHERE name = 'broadcast-ready'").get();
+        if (newTag) {
+            // Move tweet_tags from old tag to new tag (skip duplicates)
+            db.prepare(`
+                UPDATE OR IGNORE tweet_tags SET tag_id = ? WHERE tag_id = ?
+            `).run(newTag.id, oldTag.id);
+            // Clean up any remaining references to old tag
+            db.prepare("DELETE FROM tweet_tags WHERE tag_id = ?").run(oldTag.id);
+        } else {
+            // Just rename the tag
+            db.prepare("UPDATE tags SET name = 'broadcast-ready' WHERE id = ?").run(oldTag.id);
+        }
+        console.log('✅ Migrated substack-ready → broadcast-ready');
+    }
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
