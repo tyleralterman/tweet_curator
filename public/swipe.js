@@ -61,6 +61,15 @@ async function init() {
     setupKeyboardShortcuts();
     setupTagInput();
 
+    // Broadcast button
+    document.getElementById('btnBroadcast').addEventListener('click', () => {
+        const card = elements.cardStack?.querySelector('.tweet-card');
+        if (card) {
+            addTagToCurrentTweet('broadcast-ready');
+            swipeCard('right'); // Like it as well
+        }
+    });
+
     // Load Twitter Widgets
     if (!window.twttr) {
         const script = document.createElement('script');
@@ -843,21 +852,44 @@ function setupKeyboardShortcuts() {
         // Skip if tag input is focused - it has its own handlers
         if (document.activeElement === elements.quickTagInput) return;
 
-        switch (e.key) {
-            case 'ArrowRight':
+        // Right arrow - Like
+        if (e.key === 'ArrowRight') {
+            swipeCard('right');
+            return;
+        }
+
+        // Left arrow - Pass
+        if (e.key === 'ArrowLeft') {
+            swipeCard('left');
+            return;
+        }
+
+        // Up arrow - Superlike
+        if (e.key === 'ArrowUp') {
+            swipeCard('up');
+            return;
+        }
+
+        // Down arrow - Review Later
+        if (e.key === 'ArrowDown') {
+            swipeCard('down');
+            return;
+        }
+
+        // B key - Broadcast
+        if (e.key === 'b' || e.key === 'B') {
+            const card = elements.cardStack?.querySelector('.tweet-card');
+            if (card) {
+                addTagToCurrentTweet('broadcast-ready');
                 swipeCard('right');
-                break;
-            case 'ArrowLeft':
-                swipeCard('left');
-                break;
-            case 'ArrowUp':
-                swipeCard('up');
-                break;
-            // ArrowDown removed - only navigates autocomplete now
-            case 'z':
-            case 'Z':
-                if (!elements.btnUndo.disabled) undoSwipe();
-                break;
+            }
+            return;
+        }
+
+        // Z key - Undo
+        if ((e.key === 'z' || e.key === 'Z') && !elements.btnUndo.disabled) {
+            undoSwipe();
+            return;
         }
     });
 }
