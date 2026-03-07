@@ -10,21 +10,28 @@
 
 const { BskyAgent, RichText } = require('@atproto/api');
 
+// Global cache to avoid hitting login rate limits on Render
+let globalAgent = null;
+let globalIsLoggedIn = false;
+
 class BlueskyAPI {
     constructor(handle = null, appPassword = null) {
         this.handle = handle || process.env.BLUESKY_HANDLE;
         this.appPassword = appPassword || process.env.BLUESKY_APP_PASSWORD;
-        this.agent = new BskyAgent({
-            service: 'https://bsky.social'
-        });
-        this.isLoggedIn = false;
+
+        if (!globalAgent) {
+            globalAgent = new BskyAgent({
+                service: 'https://bsky.social'
+            });
+        }
+        this.agent = globalAgent;
     }
 
     /**
      * Authenticate with Bluesky
      */
     async login() {
-        if (this.isLoggedIn) return true;
+        if (globalIsLoggedIn) return true;
 
         if (!this.handle || !this.appPassword) {
             throw new Error('BLUESKY_HANDLE and BLUESKY_APP_PASSWORD environment variables required');
@@ -35,13 +42,20 @@ class BlueskyAPI {
                 identifier: this.handle,
                 password: this.appPassword
             });
-            this.isLoggedIn = true;
+            globalIsLoggedIn = true;
             console.log(`✅ Bluesky: Logged in as @${this.handle}`);
             return true;
         } catch (err) {
             console.error('❌ Bluesky login failed:', err.message);
             throw err;
         }
+    }
+
+    /**
+     * Force a login refresh (e.g. after a rate limit)
+     */
+    resetLogin() {
+        globalIsLoggedIn = false;
     }
 
     /**
@@ -67,7 +81,7 @@ class BlueskyAPI {
                 if (isRateLimit && attempt < maxRetries) {
                     console.log(`⏳ Bluesky: Rate limited, retry ${attempt}/${maxRetries} in ${attempt * 2}s...`);
                     await new Promise(r => setTimeout(r, attempt * 2000));
-                    this.isLoggedIn = false; // Reset login state for retry
+                    globalIsLoggedIn = false; // Reset login state for retry
                     continue;
                 }
                 // If we have credentials but can't connect, still report as configured

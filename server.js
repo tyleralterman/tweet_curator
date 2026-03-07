@@ -2251,7 +2251,7 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
                                 if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
                                     console.log(`⏳ Bluesky post retry ${attempt}/3 in ${attempt * 3}s...`);
                                     await new Promise(r => setTimeout(r, attempt * 3000));
-                                    api.isLoggedIn = false;
+                                    api.resetLogin();
                                     continue;
                                 }
                                 throw retryErr;
@@ -2353,7 +2353,7 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
                                     } catch (retryErr) {
                                         if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
                                             await new Promise(r => setTimeout(r, attempt * 3000));
-                                            api.isLoggedIn = false;
+                                            api.resetLogin();
                                             continue;
                                         }
                                         throw retryErr;
