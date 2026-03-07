@@ -148,9 +148,8 @@ function renderNotes() {
 
         // Per-card platform toggles
         const cardToggles = ['bluesky', 'linkedin', 'threads'].map(p => {
-            const active = enabledPlatforms.includes(p);
             const connected = platformStatus[p]?.connected;
-            return `<div class="card-platform-toggle ${active && connected ? 'active' : ''} ${p}" 
+            return `<div class="card-platform-toggle ${connected ? 'active' : ''} ${p}" 
                          data-platform="${p}" data-tweet-id="${post.id}"
                          onclick="toggleCardPlatform(this)"
                          title="${PLATFORMS[p].name}${connected ? '' : ' (disconnected)'}">
