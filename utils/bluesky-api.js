@@ -36,8 +36,21 @@ class BlueskyAPI {
         // 1. Try resuming from a stored session JSON first (bypasses IP login rate limits)
         if (process.env.BLUESKY_SESSION_JSON) {
             try {
-                const sessionStr = process.env.BLUESKY_SESSION_JSON;
+                let sessionStr = process.env.BLUESKY_SESSION_JSON;
+
+                // Aggressively clean the string of invisible unicode, whitespace, and surrounding quotes
+                sessionStr = sessionStr.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '');
+                sessionStr = sessionStr.trim();
+                if (sessionStr.startsWith("'") && sessionStr.endsWith("'")) sessionStr = sessionStr.slice(1, -1);
+                if (sessionStr.startsWith('"') && sessionStr.endsWith('"')) sessionStr = sessionStr.slice(1, -1);
+
                 const sessionData = typeof sessionStr === 'string' ? JSON.parse(sessionStr) : sessionStr;
+
+                // Also clean the handle inside the session data
+                if (sessionData.handle) {
+                    sessionData.handle = sessionData.handle.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '').trim();
+                }
+
                 await this.agent.resumeSession(sessionData);
                 globalIsLoggedIn = true;
                 this.handle = sessionData.handle || this.handle;
