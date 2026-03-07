@@ -2216,39 +2216,21 @@ app.get('/api/broadcast/status', async (req, res) => {
 
 // Diagnostic endpoint for troubleshooting Bluesky rate limits on Render
 app.get('/api/broadcast/bluesky/debug', async (req, res) => {
-    const { BskyAgent, RichText } = require('@atproto/api');
     const logs = [];
     const log = (msg) => { logs.push(msg); console.log(msg); };
 
-    log("Starting debug test...");
-    const agent = new BskyAgent({ service: 'https://bsky.social' });
+    log("Starting debug test with session resume...");
 
     try {
-        log("Attempting login...");
-        await agent.login({
-            identifier: process.env.BLUESKY_HANDLE,
-            password: process.env.BLUESKY_APP_PASSWORD
-        });
-        log("Login successful.");
-    } catch (err) {
-        log(`Login Error: ${err.message}`);
-        return res.status(500).json({ step: 'login', error: err.message, logs });
-    }
+        log("Instantiating API...");
+        const api = new BlueskyAPI();
 
-    try {
         log("Attempting string post...");
         const text = "Diagnostic broadcast from Render API " + Date.now();
-        const rt = new RichText({ text });
 
-        log("Detecting facets...");
-        await rt.detectFacets(agent);
+        log("Calling api.post()...");
+        const postRes = await api.post(text);
 
-        log("Calling agent.post()...");
-        const postRes = await agent.post({
-            text: rt.text,
-            facets: rt.facets,
-            createdAt: new Date().toISOString()
-        });
         log(`Post successful: ${postRes.uri}`);
         res.json({ success: true, uri: postRes.uri, logs });
     } catch (err) {
