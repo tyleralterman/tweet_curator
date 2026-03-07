@@ -257,7 +257,15 @@ async function broadcastSingle(id) {
             broadcastHistory = await histRes.json();
             renderNotes();
         } else {
-            showToast(`Failed: ${result.error || 'Unknown error'}`, 'error');
+            // Get error messages from the results object
+            const errorMsgs = [];
+            if (result.results) {
+                for (const [platform, res] of Object.entries(result.results)) {
+                    if (!res.success) errorMsgs.push(`${PLATFORMS[platform].name}: ${res.error}`);
+                }
+            }
+            const errorStr = errorMsgs.length > 0 ? errorMsgs.join(', ') : (result.error || 'Unknown error');
+            showToast(`Failed - ${errorStr}`, 'error');
         }
     } catch (err) {
         showToast(`Error: ${err.message}`, 'error');
