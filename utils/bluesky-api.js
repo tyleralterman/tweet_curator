@@ -33,6 +33,22 @@ class BlueskyAPI {
     async login() {
         if (globalIsLoggedIn) return true;
 
+        // 1. Try resuming from a stored session JSON first (bypasses IP login rate limits)
+        if (process.env.BLUESKY_SESSION_JSON) {
+            try {
+                const sessionStr = process.env.BLUESKY_SESSION_JSON;
+                const sessionData = typeof sessionStr === 'string' ? JSON.parse(sessionStr) : sessionStr;
+                await this.agent.resumeSession(sessionData);
+                globalIsLoggedIn = true;
+                this.handle = sessionData.handle || this.handle;
+                console.log(`✅ Bluesky: Resumed session for @${this.handle} from JSON`);
+                return true;
+            } catch (err) {
+                console.warn('⚠️ Bluesky: Failed to resume session, falling back to login:', err.message);
+            }
+        }
+
+        // 2. Fallback to password login
         if (!this.handle || !this.appPassword) {
             throw new Error('BLUESKY_HANDLE and BLUESKY_APP_PASSWORD environment variables required');
         }
