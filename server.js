@@ -2181,7 +2181,11 @@ app.get('/api/broadcast/status', async (req, res) => {
     try {
         const api = new BlueskyAPI();
         const result = await api.testConnection();
-        results.bluesky = { connected: result.success, handle: result.handle || null };
+        if (result.success) {
+            results.bluesky = { connected: true, handle: result.handle };
+        } else {
+            results.bluesky = { connected: false, handle: null, error: result.error };
+        }
     } catch (err) {
         results.bluesky = { connected: false, error: err.message };
     }
