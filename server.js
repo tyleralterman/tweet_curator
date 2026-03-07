@@ -177,6 +177,20 @@ try {
         db.prepare('ALTER TABLE substack_blog_queue ADD COLUMN substack_post_id TEXT').run();
         console.log('✅ substack_post_id column added');
     }
+
+    // Create broadcast_history table for tracking multi-platform posts
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS broadcast_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tweet_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            external_post_id TEXT,
+            success INTEGER DEFAULT 1,
+            error_message TEXT
+        )
+    `);
+    console.log('✅ broadcast_history table ready');
 } catch (e) {
     console.log('Note: column migration:', e.message);
 }
@@ -1828,6 +1842,550 @@ app.post('/api/broadcast/bluesky/batch', async (req, res) => {
     } catch (err) {
         console.error('Bluesky batch error:', err);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
+// LinkedIn API Integration
+// ============================================
+
+const LinkedInAPI = require('./utils/linkedin-api');
+
+// LinkedIn - Start Auth Flow
+app.get('/api/auth/linkedin', (req, res) => {
+    try {
+        const api = new LinkedInAPI();
+        const url = api.getAuthUrl();
+        res.redirect(url);
+    } catch (err) {
+        console.error('LinkedIn auth start error:', err);
+        res.status(500).send('Failed to start LinkedIn auth');
+    }
+});
+
+// LinkedIn - Callback
+app.get('/api/auth/linkedin/callback', async (req, res) => {
+    try {
+        const { code, error } = req.query;
+
+        if (error) {
+            return res.status(400).send(`LinkedIn Auth Error: ${error}`);
+        }
+
+        if (!code) {
+            return res.status(400).send('No code provided');
+        }
+
+        const api = new LinkedInAPI();
+        const tokens = await api.exchangeCodeForTokens(code);
+
+        res.send(`
+            <html><body style="font-family: sans-serif; padding: 40px; background: #1a1a2e; color: #eee;">
+            <h1>✅ LinkedIn Connected!</h1>
+            <p><strong>Add these to your .env file:</strong></p>
+            <textarea style="width: 100%; height: 200px; font-family: monospace; background: #16213e; color: #0f0; border: 1px solid #333; padding: 12px; font-size: 14px;">
+LINKEDIN_ACCESS_TOKEN=${tokens.accessToken}
+LINKEDIN_REFRESH_TOKEN=${tokens.refreshToken || 'N/A'}
+LINKEDIN_PERSON_URN=${tokens.personUrn}
+            </textarea>
+            <p>Access Token Expires In: ${Math.round(tokens.expiresIn / 86400)} days</p>
+            <p>Refresh Token Expires In: ${tokens.refreshTokenExpiresIn ? Math.round(tokens.refreshTokenExpiresIn / 86400) + ' days' : 'N/A'}</p>
+            </body></html>
+        `);
+
+    } catch (err) {
+        console.error('LinkedIn auth callback error:', err);
+        res.status(500).send(`Failed to exchange tokens: ${err.message}`);
+    }
+});
+
+// Post a single tweet to LinkedIn
+app.post('/api/broadcast/linkedin/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) {
+            return res.status(404).json({ error: 'Tweet not found' });
+        }
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+
+        const api = new LinkedInAPI();
+        const result = await api.createPost(text);
+
+        res.json({ success: true, result });
+    } catch (err) {
+        console.error('LinkedIn post error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Test LinkedIn connection
+app.get('/api/broadcast/linkedin/test', async (req, res) => {
+    try {
+        const api = new LinkedInAPI();
+        const profile = await api.getProfile();
+        res.json({ success: true, profile });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
+// Threads API Integration
+// ============================================
+
+const ThreadsAPI = require('./utils/threads-api');
+
+// Threads - Start Auth Flow
+app.get('/api/auth/threads', (req, res) => {
+    try {
+        const api = new ThreadsAPI();
+        const url = api.getAuthUrl();
+        res.redirect(url);
+    } catch (err) {
+        console.error('Threads auth start error:', err);
+        res.status(500).send('Failed to start Threads auth');
+    }
+});
+
+// Threads - Callback
+app.get('/api/auth/threads/callback', async (req, res) => {
+    try {
+        const { code, error } = req.query;
+
+        if (error) {
+            return res.status(400).send(`Threads Auth Error: ${error}`);
+        }
+
+        if (!code) {
+            return res.status(400).send('No code provided');
+        }
+
+        const api = new ThreadsAPI();
+        const tokens = await api.exchangeCodeForTokens(code);
+
+        res.send(`
+            <html><body style="font-family: sans-serif; padding: 40px; background: #1a1a2e; color: #eee;">
+            <h1>✅ Threads Connected!</h1>
+            <p><strong>Add these to your .env file:</strong></p>
+            <textarea style="width: 100%; height: 200px; font-family: monospace; background: #16213e; color: #0f0; border: 1px solid #333; padding: 12px; font-size: 14px;">
+THREADS_ACCESS_TOKEN=${tokens.accessToken}
+THREADS_USER_ID=${tokens.userId}
+            </textarea>
+            <p>Access Token Expires In: ${Math.round(tokens.expiresIn / 86400)} days</p>
+            </body></html>
+        `);
+
+    } catch (err) {
+        console.error('Threads auth callback error:', err);
+        res.status(500).send(`Failed to exchange tokens: ${err.message}`);
+    }
+});
+
+// Post a single tweet to Threads
+app.post('/api/broadcast/threads/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) {
+            return res.status(404).json({ error: 'Tweet not found' });
+        }
+
+        // Threads has 500 char limit
+        let text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        if (text.length > 500) {
+            text = text.substring(0, 497) + '...';
+        }
+
+        const api = new ThreadsAPI();
+        const result = await api.createPost(text);
+
+        res.json(result);
+    } catch (err) {
+        console.error('Threads post error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Test Threads connection
+app.get('/api/broadcast/threads/test', async (req, res) => {
+    try {
+        const api = new ThreadsAPI();
+        const profile = await api.getProfile();
+        res.json({ success: true, profile });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
+// Instagram API Integration
+// ============================================
+
+const InstagramAPI = require('./utils/instagram-api');
+
+// Instagram - Start Auth Flow (via Facebook Login)
+app.get('/api/auth/instagram', (req, res) => {
+    const appId = process.env.THREADS_APP_ID; // Same Meta App
+    const redirectUri = encodeURIComponent('http://localhost:3000/api/auth/instagram/callback');
+    const scope = 'instagram_basic,instagram_content_publish';
+    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+    res.redirect(url);
+});
+
+// Instagram - Callback
+app.get('/api/auth/instagram/callback', async (req, res) => {
+    try {
+        const { code, error } = req.query;
+        if (error) return res.status(400).send(`Instagram Auth Error: ${error}`);
+        if (!code) return res.status(400).send('No code provided');
+
+        // Exchange code for token
+        const tokenResponse = await axios.get('https://graph.facebook.com/v21.0/oauth/access_token', {
+            params: {
+                client_id: process.env.THREADS_APP_ID,
+                client_secret: process.env.THREADS_APP_SECRET,
+                redirect_uri: 'http://localhost:3000/api/auth/instagram/callback',
+                code
+            }
+        });
+
+        const fbToken = tokenResponse.data.access_token;
+
+        // Get Instagram Business Account ID via Facebook Pages
+        const pagesResponse = await axios.get('https://graph.facebook.com/v21.0/me/accounts', {
+            params: { access_token: fbToken }
+        });
+
+        let igUserId = null;
+        let igToken = fbToken;
+
+        for (const page of pagesResponse.data.data || []) {
+            const igResponse = await axios.get(`https://graph.facebook.com/v21.0/${page.id}`, {
+                params: { fields: 'instagram_business_account', access_token: page.access_token }
+            });
+            if (igResponse.data.instagram_business_account) {
+                igUserId = igResponse.data.instagram_business_account.id;
+                igToken = page.access_token;
+                break;
+            }
+        }
+
+        if (!igUserId) {
+            return res.status(400).send(`
+                <html><body style="font-family: sans-serif; padding: 40px; background: #1a1a2e; color: #eee;">
+                <h1>⚠️ No Instagram Business Account Found</h1>
+                <p>Make sure your Instagram account is set to Business or Creator, and is linked to a Facebook Page.</p>
+                </body></html>
+            `);
+        }
+
+        res.send(`
+            <html><body style="font-family: sans-serif; padding: 40px; background: #1a1a2e; color: #eee;">
+            <h1>✅ Instagram Connected!</h1>
+            <p><strong>Add these to your .env file:</strong></p>
+            <textarea style="width: 100%; height: 200px; font-family: monospace; background: #16213e; color: #0f0; border: 1px solid #333; padding: 12px; font-size: 14px;">
+INSTAGRAM_ACCESS_TOKEN=${igToken}
+INSTAGRAM_USER_ID=${igUserId}
+            </textarea>
+            </body></html>
+        `);
+
+    } catch (err) {
+        console.error('Instagram auth callback error:', err.response?.data || err);
+        res.status(500).send(`Failed to exchange tokens: ${err.message}`);
+    }
+});
+
+// Post a tweet as a quote card to Instagram
+app.post('/api/broadcast/instagram/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+
+        const api = new InstagramAPI();
+        const result = await api.postQuoteCard(text, text, id);
+
+        res.json(result);
+    } catch (err) {
+        console.error('Instagram post error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Preview a quote card (generate without posting)
+app.get('/api/broadcast/instagram/preview/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+
+        const api = new InstagramAPI();
+        const imagePath = await api.generateQuoteCard(text, 'Tyler Alterman', id);
+
+        res.sendFile(imagePath);
+    } catch (err) {
+        console.error('Instagram preview error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Test Instagram connection
+app.get('/api/broadcast/instagram/test', async (req, res) => {
+    try {
+        const api = new InstagramAPI();
+        const profile = await api.getProfile();
+        res.json({ success: true, profile });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
+// Unified Broadcast Engine
+// ============================================
+
+// Check all platform connection statuses
+app.get('/api/broadcast/status', async (req, res) => {
+    const results = {};
+
+    // Bluesky
+    try {
+        const api = new BlueskyAPI();
+        const result = await api.testConnection();
+        results.bluesky = { connected: result.success, handle: result.handle || null };
+    } catch (err) {
+        results.bluesky = { connected: false, error: err.message };
+    }
+
+    // LinkedIn
+    try {
+        const api = new LinkedInAPI();
+        const profile = await api.getProfile();
+        results.linkedin = { connected: true, name: profile.name || 'Connected' };
+    } catch (err) {
+        results.linkedin = { connected: false, error: err.message };
+    }
+
+    // Threads
+    try {
+        const api = new ThreadsAPI();
+        const profile = await api.getProfile();
+        results.threads = { connected: true, username: profile.username || profile.name };
+    } catch (err) {
+        results.threads = { connected: false, error: err.message };
+    }
+
+    // Substack Notes (always ready — export-only)
+    results.substack = { connected: true, method: 'yaml-export' };
+
+    res.json(results);
+});
+
+// Broadcast a single tweet to multiple platforms
+app.post('/api/broadcast/multi/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { platforms } = req.body; // e.g. ['bluesky', 'linkedin', 'threads']
+
+        if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'platforms array required' });
+        }
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        const results = {};
+
+        const logBroadcast = (platform, success, postId, errorMsg) => {
+            db.prepare(`
+                INSERT INTO broadcast_history (tweet_id, platform, external_post_id, success, error_message)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(id, platform, postId || null, success ? 1 : 0, errorMsg || null);
+        };
+
+        for (const platform of platforms) {
+            try {
+                switch (platform) {
+                    case 'bluesky': {
+                        const api = new BlueskyAPI();
+                        const result = await api.post(text);
+                        logBroadcast('bluesky', true, result.uri);
+                        results.bluesky = { success: true, uri: result.uri };
+                        break;
+                    }
+                    case 'linkedin': {
+                        const api = new LinkedInAPI();
+                        const result = await api.createPost(text);
+                        logBroadcast('linkedin', true, result.id);
+                        results.linkedin = { success: true, postId: result.id };
+                        break;
+                    }
+                    case 'threads': {
+                        let threadText = text;
+                        if (threadText.length > 500) {
+                            threadText = threadText.substring(0, 497) + '...';
+                        }
+                        const api = new ThreadsAPI();
+                        const result = await api.createPost(threadText);
+                        logBroadcast('threads', true, result.postId);
+                        results.threads = { success: true, postId: result.postId };
+                        break;
+                    }
+                    default:
+                        results[platform] = { success: false, error: 'Unknown platform' };
+                }
+            } catch (err) {
+                console.error(`Broadcast to ${platform} failed:`, err.message);
+                logBroadcast(platform, false, null, err.message);
+                results[platform] = { success: false, error: err.message };
+            }
+        }
+
+        const successCount = Object.values(results).filter(r => r.success).length;
+        res.json({
+            success: successCount > 0,
+            total: platforms.length,
+            successful: successCount,
+            failed: platforms.length - successCount,
+            results
+        });
+    } catch (err) {
+        console.error('Multi-broadcast error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Batch broadcast entire queue to selected platforms
+app.post('/api/broadcast/multi/batch', async (req, res) => {
+    try {
+        const { platforms } = req.body;
+        const delayMs = parseInt(req.query.delay) || 30000; // 30s between posts
+
+        if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'platforms array required' });
+        }
+
+        const tweets = db.prepare(`
+            SELECT t.id, t.full_text, t.combined_text, t.blog_text
+            FROM tweets t
+            JOIN tweet_tags tt ON t.id = tt.tweet_id
+            JOIN tags g ON tt.tag_id = g.id
+            WHERE g.name = 'broadcast-ready'
+            ORDER BY t.queue_order ASC, t.created_at DESC
+        `).all();
+
+        if (tweets.length === 0) {
+            return res.status(400).json({ error: 'No posts in broadcast queue' });
+        }
+
+        // Send response immediately, process in background
+        res.json({
+            success: true,
+            message: `Broadcasting ${tweets.length} posts to ${platforms.join(', ')} with ${delayMs / 1000}s delays`,
+            total: tweets.length,
+            platforms
+        });
+
+        // Process in background
+        (async () => {
+            for (let i = 0; i < tweets.length; i++) {
+                const tweet = tweets[i];
+                const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+
+                for (const platform of platforms) {
+                    try {
+                        switch (platform) {
+                            case 'bluesky': {
+                                const api = new BlueskyAPI();
+                                await api.post(text);
+                                break;
+                            }
+                            case 'linkedin': {
+                                const api = new LinkedInAPI();
+                                await api.createPost(text);
+                                break;
+                            }
+                            case 'threads': {
+                                let threadText = text.length > 500 ? text.substring(0, 497) + '...' : text;
+                                const api = new ThreadsAPI();
+                                await api.createPost(threadText);
+                                break;
+                            }
+                        }
+                        db.prepare(`
+                            INSERT INTO broadcast_history (tweet_id, platform, success)
+                            VALUES (?, ?, 1)
+                        `).run(tweet.id, platform);
+                        console.log(`📡 [${i + 1}/${tweets.length}] Broadcasted to ${platform}`);
+                    } catch (err) {
+                        db.prepare(`
+                            INSERT INTO broadcast_history (tweet_id, platform, success, error_message)
+                            VALUES (?, ?, 0, ?)
+                        `).run(tweet.id, platform, err.message);
+                        console.error(`❌ [${i + 1}/${tweets.length}] Failed ${platform}:`, err.message);
+                    }
+                }
+
+                // Delay between posts (not after the last one)
+                if (i < tweets.length - 1) {
+                    await new Promise(r => setTimeout(r, delayMs));
+                }
+            }
+            console.log('✅ Batch broadcast complete');
+        })();
+    } catch (err) {
+        console.error('Batch broadcast error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get broadcast history for a tweet
+app.get('/api/broadcast/history/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const history = db.prepare(`
+            SELECT platform, posted_at, external_post_id, success, error_message
+            FROM broadcast_history
+            WHERE tweet_id = ?
+            ORDER BY posted_at DESC
+        `).all(id);
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get broadcast history for all tweets in queue (batch)
+app.get('/api/broadcast/history', (req, res) => {
+    try {
+        const history = db.prepare(`
+            SELECT tweet_id, platform, posted_at, success, error_message
+            FROM broadcast_history
+            WHERE success = 1
+            ORDER BY posted_at DESC
+        `).all();
+
+        // Group by tweet_id
+        const grouped = {};
+        for (const entry of history) {
+            if (!grouped[entry.tweet_id]) grouped[entry.tweet_id] = [];
+            grouped[entry.tweet_id].push(entry);
+        }
+        res.json(grouped);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -4,10 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notes Queue | Chimera Broadcast</title>
+    <title>Broadcast Hub | Chimera Broadcast</title>
     <link rel="stylesheet" href="scheduler.css">
-    <link rel="stylesheet" href="notes-queue.css?v=1">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="notes-queue.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
 </head>
 
@@ -15,15 +16,15 @@
     <header class="app-header">
         <a href="/" class="back-link">← Dashboard</a>
         <div class="header-title">
-            <h1>📡 Notes Queue</h1>
-            <span class="badge" id="queue-count">0 notes</span>
+            <h1>📡 Broadcast Hub</h1>
+            <span class="badge" id="queue-count">0 posts</span>
         </div>
         <div class="header-actions">
             <button id="export-yaml-btn" class="btn-substack" onclick="exportYAML()">
-                <span class="icon">📥</span> Export for Substack
+                <span class="icon">📥</span> Export YAML
             </button>
-            <button id="post-bluesky-btn" class="btn-bluesky" onclick="postToBluesky()">
-                <span class="icon">🦋</span> Post to Bluesky
+            <button id="broadcast-all-btn" class="btn-broadcast-all" onclick="broadcastAll()">
+                <span class="icon">🚀</span> Broadcast All
             </button>
         </div>
     </header>
@@ -31,109 +32,144 @@
     <main class="scheduler-container">
         <!-- Platform Status Panel -->
         <div class="platform-panel">
-            <h2>Broadcast Platforms</h2>
+            <div class="platform-panel-header">
+                <h2>🛰️ Platforms</h2>
+                <button class="btn-refresh" onclick="checkAllPlatforms()" title="Refresh status">↻</button>
+            </div>
             <div class="platform-toggles">
-                <div class="platform-card" data-platform="substack">
-                    <div class="platform-icon">📝</div>
-                    <div class="platform-info">
-                        <span class="platform-name">Substack Notes</span>
-                        <span class="platform-method">YAML Export → Finn Tropy</span>
-                    </div>
-                    <div class="platform-status ready">Ready</div>
-                </div>
-                <div class="platform-card" data-platform="bluesky">
+                <div class="platform-card" data-platform="bluesky" id="platform-bluesky">
                     <div class="platform-icon">🦋</div>
                     <div class="platform-info">
                         <span class="platform-name">Bluesky</span>
                         <span class="platform-method">API Direct Post</span>
                     </div>
-                    <div class="platform-status" id="bluesky-status">Checking...</div>
+                    <div class="platform-status" id="status-bluesky">Checking...</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-bluesky" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <div class="platform-card disabled" data-platform="linkedin">
+                <div class="platform-card" data-platform="linkedin" id="platform-linkedin">
                     <div class="platform-icon">💼</div>
                     <div class="platform-info">
                         <span class="platform-name">LinkedIn</span>
-                        <span class="platform-method">Coming Soon</span>
+                        <span class="platform-method">API Direct Post</span>
                     </div>
-                    <div class="platform-status">Not Connected</div>
+                    <div class="platform-status" id="status-linkedin">Checking...</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-linkedin" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <div class="platform-card disabled" data-platform="threads">
+                <div class="platform-card" data-platform="threads" id="platform-threads">
                     <div class="platform-icon">🧵</div>
                     <div class="platform-info">
                         <span class="platform-name">Threads</span>
-                        <span class="platform-method">Coming Soon</span>
+                        <span class="platform-method">API Direct Post</span>
                     </div>
-                    <div class="platform-status">Not Connected</div>
+                    <div class="platform-status" id="status-threads">Checking...</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-threads" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="platform-card" data-platform="substack" id="platform-substack">
+                    <div class="platform-icon">📝</div>
+                    <div class="platform-info">
+                        <span class="platform-name">Substack Notes</span>
+                        <span class="platform-method">YAML Export → Scheduler</span>
+                    </div>
+                    <div class="platform-status ready" id="status-substack">Ready</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-substack" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
             </div>
         </div>
 
-        <!-- Scheduling Options -->
-        <div class="schedule-options">
-            <h3>📅 Scheduling Options</h3>
-            <div class="options-grid">
-                <div class="option-group">
-                    <label for="start-days">Start in</label>
-                    <select id="start-days">
-                        <option value="1">Tomorrow</option>
-                        <option value="2">2 days</option>
-                        <option value="7">1 week</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label for="notes-per-day">Notes/day</label>
-                    <select id="notes-per-day">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3" selected>3</option>
-                        <option value="5">5</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label for="hours-start">First slot</label>
-                    <select id="hours-start">
-                        <option value="7">7 AM</option>
-                        <option value="8">8 AM</option>
-                        <option value="9" selected>9 AM</option>
-                        <option value="10">10 AM</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label for="hours-end">Last slot</label>
-                    <select id="hours-end">
-                        <option value="18">6 PM</option>
-                        <option value="20">8 PM</option>
-                        <option value="21" selected>9 PM</option>
-                        <option value="23">11 PM</option>
-                    </select>
-                </div>
+        <!-- Scheduling Options (for YAML export) -->
+        <div class="schedule-options collapsed" id="schedule-section">
+            <div class="schedule-header" onclick="toggleScheduleOptions()">
+                <h3>📅 Scheduling Options <span class="collapse-arrow">▶</span></h3>
             </div>
-            <div class="schedule-preview" id="schedule-preview">
-                <!-- Preview will be populated by JS -->
+            <div class="schedule-body">
+                <div class="options-grid">
+                    <div class="option-group">
+                        <label for="start-days">Start in</label>
+                        <select id="start-days">
+                            <option value="1">Tomorrow</option>
+                            <option value="2">2 days</option>
+                            <option value="7">1 week</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label for="notes-per-day">Posts/day</label>
+                        <select id="notes-per-day">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="5">5</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label for="hours-start">First slot</label>
+                        <select id="hours-start">
+                            <option value="7">7 AM</option>
+                            <option value="8">8 AM</option>
+                            <option value="9" selected>9 AM</option>
+                            <option value="10">10 AM</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label for="hours-end">Last slot</label>
+                        <select id="hours-end">
+                            <option value="18">6 PM</option>
+                            <option value="20">8 PM</option>
+                            <option value="21" selected>9 PM</option>
+                            <option value="23">11 PM</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="schedule-preview" id="schedule-preview"></div>
             </div>
         </div>
 
-        <!-- Notes Queue List -->
+        <!-- Broadcast Queue List -->
         <div class="queue-section">
             <div class="queue-header">
-                <h3>📋 Queue</h3>
-                <span class="queue-hint">Drag to reorder • Click to preview</span>
+                <h3>📋 Broadcast Queue</h3>
+                <span class="queue-hint">Drag to reorder • Click card to expand</span>
             </div>
             <div id="notes-list" class="notes-list">
-                <div class="loading">Loading notes...</div>
+                <div class="loading">Loading queue...</div>
             </div>
             <div class="empty-state" id="empty-state" style="display: none;">
                 <div class="empty-icon">📭</div>
-                <p>No notes in queue</p>
+                <p>No posts in broadcast queue</p>
                 <a href="/swipe.html" class="btn-primary">Add from Swipe Interface</a>
             </div>
         </div>
     </main>
 
+    <!-- Progress Overlay -->
+    <div class="broadcast-overlay" id="broadcast-overlay" style="display: none;">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h2>🚀 Broadcasting...</h2>
+                <p id="overlay-status">Starting...</p>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="overlay-progress"></div>
+            </div>
+            <div id="overlay-log" class="overlay-log"></div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast" class="toast"></div>
 
-    <script src="notes-queue.js?v=1"></script>
+    <script src="notes-queue.js?v=3"></script>
 </body>
 
 </html>

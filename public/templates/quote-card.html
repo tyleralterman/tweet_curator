@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1080px;
+            height: 1080px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: linear-gradient(145deg, #0a0a1a 0%, #1a1a3e 40%, #2d1b4e 70%, #1a1a2e 100%);
+            overflow: hidden;
+        }
+
+        .card {
+            width: 920px;
+            min-height: 200px;
+            max-height: 900px;
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Decorative accent line */
+        .card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 60%;
+            background: linear-gradient(180deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            border-radius: 2px;
+        }
+
+        .quote-text {
+            font-size: 38px;
+            font-weight: 500;
+            line-height: 1.5;
+            color: #f0f0f5;
+            letter-spacing: -0.01em;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Dynamic font sizing classes */
+        .quote-text.size-xl {
+            font-size: 48px;
+            line-height: 1.4;
+        }
+
+        .quote-text.size-lg {
+            font-size: 38px;
+        }
+
+        .quote-text.size-md {
+            font-size: 30px;
+        }
+
+        .quote-text.size-sm {
+            font-size: 24px;
+            line-height: 1.55;
+        }
+
+        .attribution {
+            margin-top: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .attribution .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            flex-shrink: 0;
+        }
+
+        .attribution .name {
+            font-size: 18px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* Subtle corner accents */
+        .corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            opacity: 0.15;
+        }
+
+        .corner-tl {
+            top: 40px;
+            left: 40px;
+            border-top: 2px solid #a855f7;
+            border-left: 2px solid #a855f7;
+        }
+
+        .corner-br {
+            bottom: 40px;
+            right: 40px;
+            border-bottom: 2px solid #6366f1;
+            border-right: 2px solid #6366f1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-br"></div>
+    <div class="card">
+        <div class="quote-text" id="quote">{{QUOTE_TEXT}}</div>
+        <div class="attribution">
+            <span class="dot"></span>
+            <span class="name">{{ATTRIBUTION}}</span>
+        </div>
+    </div>
+</body>
+
+</html>
