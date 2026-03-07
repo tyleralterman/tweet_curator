@@ -24,10 +24,8 @@ const queueCount = document.getElementById('queue-count');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    await Promise.all([
-        checkAllPlatforms(),
-        loadNotes()
-    ]);
+    await checkAllPlatforms();
+    await loadNotes();
     updateSchedulePreview();
 
     document.querySelectorAll('.option-group select').forEach(select => {
