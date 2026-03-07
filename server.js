@@ -2242,7 +2242,21 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
                 switch (platform) {
                     case 'bluesky': {
                         const api = new BlueskyAPI();
-                        const result = await api.post(text);
+                        let result;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                result = await api.post(text);
+                                break;
+                            } catch (retryErr) {
+                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                    console.log(`⏳ Bluesky post retry ${attempt}/3 in ${attempt * 3}s...`);
+                                    await new Promise(r => setTimeout(r, attempt * 3000));
+                                    api.isLoggedIn = false;
+                                    continue;
+                                }
+                                throw retryErr;
+                            }
+                        }
                         logBroadcast('bluesky', true, result.uri);
                         results.bluesky = { success: true, uri: result.uri };
                         break;
@@ -2260,6 +2274,7 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
                             threadText = threadText.substring(0, 497) + '...';
                         }
                         const api = new ThreadsAPI();
+                        await api.getProfile(); // Populates userId required for createPost
                         const result = await api.createPost(threadText);
                         logBroadcast('threads', true, result.postId);
                         results.threads = { success: true, postId: result.postId };
@@ -2331,7 +2346,19 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
                         switch (platform) {
                             case 'bluesky': {
                                 const api = new BlueskyAPI();
-                                await api.post(text);
+                                for (let attempt = 1; attempt <= 3; attempt++) {
+                                    try {
+                                        await api.post(text);
+                                        break;
+                                    } catch (retryErr) {
+                                        if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                            await new Promise(r => setTimeout(r, attempt * 3000));
+                                            api.isLoggedIn = false;
+                                            continue;
+                                        }
+                                        throw retryErr;
+                                    }
+                                }
                                 break;
                             }
                             case 'linkedin': {
@@ -2342,6 +2369,7 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
                             case 'threads': {
                                 let threadText = text.length > 500 ? text.substring(0, 497) + '...' : text;
                                 const api = new ThreadsAPI();
+                                await api.getProfile(); // Populates userId required for createPost
                                 await api.createPost(threadText);
                                 break;
                             }
