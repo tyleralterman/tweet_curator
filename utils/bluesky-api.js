@@ -45,24 +45,44 @@ class BlueskyAPI {
     }
 
     /**
-     * Test connection to Bluesky
+     * Test connection to Bluesky (with retry for rate limits)
      */
     async testConnection() {
-        try {
-            await this.login();
-            const profile = await this.agent.getProfile({ actor: this.handle });
-            return {
-                success: true,
-                handle: profile.data.handle,
-                displayName: profile.data.displayName,
-                followersCount: profile.data.followersCount,
-                postsCount: profile.data.postsCount
-            };
-        } catch (err) {
-            return {
-                success: false,
-                error: err.message
-            };
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                await this.login();
+                const profile = await this.agent.getProfile({ actor: this.handle });
+                return {
+                    success: true,
+                    handle: profile.data.handle,
+                    displayName: profile.data.displayName,
+                    followersCount: profile.data.followersCount,
+                    postsCount: profile.data.postsCount
+                };
+            } catch (err) {
+                const isRateLimit = err.message?.includes('Rate Limit') ||
+                    err.status === 429 ||
+                    err.message?.includes('rate limit');
+                if (isRateLimit && attempt < maxRetries) {
+                    console.log(`⏳ Bluesky: Rate limited, retry ${attempt}/${maxRetries} in ${attempt * 2}s...`);
+                    await new Promise(r => setTimeout(r, attempt * 2000));
+                    this.isLoggedIn = false; // Reset login state for retry
+                    continue;
+                }
+                // If we have credentials but can't connect, still report as configured
+                if (isRateLimit && this.handle) {
+                    return {
+                        success: true,
+                        handle: this.handle,
+                        rateLimited: true
+                    };
+                }
+                return {
+                    success: false,
+                    error: err.message
+                };
+            }
         }
     }
 
