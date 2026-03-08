@@ -139,8 +139,7 @@ class BlueskyAPI {
 
         // Bluesky has a 300 character limit
         if (text.length > 300) {
-            console.warn(`⚠️ Bluesky: Text truncated from ${text.length} to 300 chars`);
-            text = text.substring(0, 297) + '...';
+            throw new Error(`Text exceeds Bluesky limit of 300 characters (length: ${text.length}). Post skipped.`);
         }
 
         // Use RichText to parse links, mentions, hashtags

@@ -252,10 +252,8 @@ async function broadcastSingle(id) {
 
         if (result.success) {
             showToast(`✅ Sent to ${result.successful}/${result.total} platforms`, 'success');
-            // Refresh history
-            const histRes = await fetch('/api/broadcast/history');
-            broadcastHistory = await histRes.json();
-            renderNotes();
+            // Refresh queue and history to remove the broadcasted tweet from the UI
+            await loadNotes();
         } else {
             // Get error messages from the results object
             const errorMsgs = [];
@@ -346,14 +344,13 @@ async function broadcastAll() {
 
                     if (completed >= total) {
                         clearInterval(checkInterval);
-                        broadcastHistory = newHistory;
                         statusText.textContent = '✅ All broadcasts complete!';
                         logEl.innerHTML += `<div class="log-success">✅ Done! ${completed} broadcasts sent.</div>`;
                         progressBar.style.width = '100%';
 
-                        setTimeout(() => {
+                        setTimeout(async () => {
                             overlay.style.display = 'none';
-                            renderNotes();
+                            await loadNotes(); // Reload queue so successful posts disappear
                         }, 2000);
                     }
                 } catch (err) {
@@ -420,11 +417,13 @@ function exportYAML() {
     const perDay = document.getElementById('notes-per-day').value;
     const hoursStart = document.getElementById('hours-start').value;
     const hoursEnd = document.getElementById('hours-end').value;
+    const exportLimit = document.getElementById('export-limit').value || 0;
 
-    const url = `/api/notes/export-yaml?startDays=${startDays}&perDay=${perDay}&hoursStart=${hoursStart}&hoursEnd=${hoursEnd}`;
+    const url = `/api/notes/export-yaml?startDays=${startDays}&perDay=${perDay}&hoursStart=${hoursStart}&hoursEnd=${hoursEnd}&exportLimit=${exportLimit}`;
     window.location.href = url;
 
-    showToast(`Exporting ${posts.length} posts for Substack`, 'success');
+    const countToExport = exportLimit > 0 ? Math.min(exportLimit, posts.length) : posts.length;
+    showToast(`Exporting ${countToExport} posts for Substack`, 'success');
 }
 
 // ============================================
@@ -448,8 +447,10 @@ function updateSchedulePreview() {
     const perDay = parseInt(document.getElementById('notes-per-day').value);
     const hoursStart = parseInt(document.getElementById('hours-start').value);
     const hoursEnd = parseInt(document.getElementById('hours-end').value);
+    const exportLimit = parseInt(document.getElementById('export-limit').value) || 0;
 
-    const daysNeeded = Math.ceil(posts.length / perDay);
+    const activePostsLength = exportLimit > 0 ? Math.min(exportLimit, posts.length) : posts.length;
+    const daysNeeded = Math.ceil(activePostsLength / perDay);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() + startDays);
 
@@ -460,7 +461,7 @@ function updateSchedulePreview() {
     const endStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     preview.innerHTML = `
-        <strong>${posts.length} posts</strong> scheduled over 
+        <strong>${activePostsLength} posts</strong> scheduled over 
         <strong>${daysNeeded} day${daysNeeded > 1 ? 's' : ''}</strong> 
         (${startStr} → ${endStr}) • 
         ${perDay}/day at ${formatHour(hoursStart)}-${formatHour(hoursEnd)}

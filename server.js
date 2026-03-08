@@ -1647,14 +1647,13 @@ app.delete('/api/notes/remove/:id', (req, res) => {
 // Export Notes queue as YAML for Finn Tropy's Substack Scheduled Notes extension
 app.get('/api/notes/export-yaml', (req, res) => {
     try {
-        // Get the days offset for scheduling (default: start tomorrow)
         const startDaysOffset = parseInt(req.query.startDays) || 1;
         const notesPerDay = parseInt(req.query.perDay) || 3;
-        const hoursStart = parseInt(req.query.hoursStart) || 9;  // 9 AM
-        const hoursEnd = parseInt(req.query.hoursEnd) || 21;     // 9 PM
+        const hoursStart = parseInt(req.query.hoursStart) || 9; // 9 AM
+        const hoursEnd = parseInt(req.query.hoursEnd) || 21; // 9 PM
+        const exportLimit = parseInt(req.query.exportLimit) || 0; // 0 means no limit
 
-        // Get notes from queue
-        const query = `
+        let query = `
             SELECT t.id, t.full_text, t.combined_text, t.created_at
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
@@ -1662,12 +1661,15 @@ app.get('/api/notes/export-yaml', (req, res) => {
             WHERE g.name = 'broadcast-ready'
             ORDER BY t.queue_order ASC, t.created_at DESC
         `;
+
+        if (exportLimit > 0) {
+            query += ` LIMIT ${exportLimit}`;
+        }
+
         const tweets = db.prepare(query).all();
 
         if (tweets.length === 0) {
-            return res.status(400).json({
-                error: 'No notes in queue. Add tweets to the Notes queue first.'
-            });
+            return res.status(404).send('No broadcast-ready notes found.');
         }
 
         // Generate scheduled dates
@@ -1743,16 +1745,21 @@ app.get('/api/notes/preview-export', (req, res) => {
     try {
         const startDaysOffset = parseInt(req.query.startDays) || 1;
         const notesPerDay = parseInt(req.query.perDay) || 3;
+        const exportLimit = parseInt(req.query.exportLimit) || 0;
 
-        const query = `
+        let query = `
             SELECT t.id, t.full_text, t.combined_text, t.created_at
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
             ORDER BY t.queue_order ASC, t.created_at DESC
-            LIMIT 10
         `;
+
+        if (exportLimit > 0) {
+            query += ` LIMIT ${exportLimit}`;
+        }
+
         const tweets = db.prepare(query).all();
 
         const now = new Date();
@@ -2294,13 +2301,12 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
                         break;
                     }
                     case 'threads': {
-                        let threadText = text;
-                        if (threadText.length > 500) {
-                            threadText = threadText.substring(0, 497) + '...';
+                        if (text.length > 500) {
+                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
                         }
                         const api = new ThreadsAPI();
                         await api.getProfile(); // Populates userId required for createPost
-                        const result = await api.createPost(threadText);
+                        const result = await api.createPost(text);
                         logBroadcast('threads', true, result.postId);
                         results.threads = { success: true, postId: result.postId };
                         break;
@@ -2316,6 +2322,21 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
         }
 
         const successCount = Object.values(results).filter(r => r.success).length;
+
+        // If at least one broadcast succeeded, remove from the broadcast queue and tag as posted
+        if (successCount > 0) {
+            const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
+            if (readyTagId) {
+                // Ensure broadcast-posted tag exists
+                db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-posted', 'use');
+                const postedTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted').id;
+
+                db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(id, readyTagId);
+                db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(id, postedTagId, 'manual');
+                console.log(`✅ Replaced broadcast-ready tag with broadcast-posted for tweet ${id}`);
+            }
+        }
+
         res.json({
             success: successCount > 0,
             total: platforms.length,
@@ -2367,13 +2388,12 @@ app.post('/api/broadcast/custom', async (req, res) => {
                         break;
                     }
                     case 'threads': {
-                        let threadText = text;
-                        if (threadText.length > 500) {
-                            threadText = threadText.substring(0, 497) + '...';
+                        if (text.length > 500) {
+                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
                         }
                         const api = new ThreadsAPI();
                         await api.getProfile();
-                        const result = await api.createPost(threadText);
+                        const result = await api.createPost(text);
                         results.threads = { success: true, postId: result.postId };
                         break;
                     }
@@ -2463,10 +2483,12 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
                                 break;
                             }
                             case 'threads': {
-                                let threadText = text.length > 500 ? text.substring(0, 497) + '...' : text;
+                                if (text.length > 500) {
+                                    throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
+                                }
                                 const api = new ThreadsAPI();
                                 await api.getProfile(); // Populates userId required for createPost
-                                await api.createPost(threadText);
+                                await api.createPost(text);
                                 break;
                             }
                         }
@@ -2481,6 +2503,20 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
                             VALUES (?, ?, 0, ?)
                         `).run(tweet.id, platform, err.message);
                         console.error(`❌ [${i + 1}/${tweets.length}] Failed ${platform}:`, err.message);
+                    }
+                }
+
+                // If at least one broadcast succeeded for this tweet, update tags
+                const historyCount = db.prepare('SELECT COUNT(*) as count FROM broadcast_history WHERE tweet_id = ? AND success = 1').get(tweet.id).count;
+                if (historyCount > 0) {
+                    const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
+                    if (readyTagId) {
+                        // Ensure broadcast-posted tag exists
+                        db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-posted', 'use');
+                        const postedTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted').id;
+
+                        db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(tweet.id, readyTagId);
+                        db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(tweet.id, postedTagId, 'manual');
                     }
                 }
 
