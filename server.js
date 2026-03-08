@@ -2423,21 +2423,27 @@ app.post('/api/broadcast/custom', async (req, res) => {
 // Batch broadcast entire queue to selected platforms
 app.post('/api/broadcast/multi/batch', async (req, res) => {
     try {
-        const { platforms } = req.body;
+        const { platforms, exportLimit } = req.body;
         const delayMs = parseInt(req.query.delay) || 30000; // 30s between posts
 
         if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
             return res.status(400).json({ error: 'platforms array required' });
         }
 
-        const tweets = db.prepare(`
+        let query = `
             SELECT t.id, t.full_text, t.combined_text, t.blog_text
             FROM tweets t
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
             ORDER BY t.queue_order ASC, t.created_at DESC
-        `).all();
+        `;
+
+        if (exportLimit && parseInt(exportLimit) > 0) {
+            query += ` LIMIT ${parseInt(exportLimit)}`;
+        }
+
+        const tweets = db.prepare(query).all();
 
         if (tweets.length === 0) {
             return res.status(400).json({ error: 'No posts in broadcast queue' });

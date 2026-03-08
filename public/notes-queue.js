@@ -278,6 +278,7 @@ async function broadcastSingle(id) {
 
 async function broadcastAll() {
     const platforms = getEnabledPlatforms().filter(p => platformStatus[p]?.connected);
+    const exportLimit = parseInt(document.getElementById('export-limit').value) || 0;
 
     if (platforms.length === 0) {
         showToast('No connected platforms enabled', 'error');
@@ -289,10 +290,12 @@ async function broadcastAll() {
         return;
     }
 
+    const activePostsLength = exportLimit > 0 ? Math.min(exportLimit, posts.length) : posts.length;
+
     const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
     if (!confirm(
-        `🚀 Broadcast ALL ${posts.length} posts to:\n${platformNames}\n\n` +
-        `This will post with 30s delays between items.\nTotal time: ~${Math.ceil(posts.length * 0.5)} minutes\n\nAre you sure?`
+        `🚀 Broadcast ${exportLimit > 0 ? 'TOP ' + exportLimit : 'ALL'} ${activePostsLength} posts to:\n${platformNames}\n\n` +
+        `This will post with 30s delays between items.\nTotal time: ~${Math.ceil(activePostsLength * 0.5)} minutes\n\nAre you sure?`
     )) return;
 
     // Show progress overlay
@@ -311,7 +314,7 @@ async function broadcastAll() {
         const res = await fetch('/api/broadcast/multi/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ platforms })
+            body: JSON.stringify({ platforms, exportLimit })
         });
         const result = await res.json();
 
@@ -320,7 +323,7 @@ async function broadcastAll() {
 
             // Poll for progress by checking history
             let completed = 0;
-            const total = posts.length * platforms.length;
+            const total = activePostsLength * platforms.length;
             const checkInterval = setInterval(async () => {
                 try {
                     const histRes = await fetch('/api/broadcast/history');
