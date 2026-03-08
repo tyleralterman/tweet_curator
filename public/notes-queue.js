@@ -371,10 +371,42 @@ async function broadcastAll() {
         } else {
             showToast(`Failed: ${result.error}`, 'error');
             overlay.style.display = 'none';
+            stopBtn.style.display = 'none'; // Hide stop button on failure
         }
     } catch (err) {
         showToast(`Error: ${err.message}`, 'error');
         overlay.style.display = 'none';
+        stopBtn.style.display = 'none'; // Hide stop button on error
+    }
+}
+
+async function stopBroadcast() {
+    const btn = document.getElementById('stop-broadcast-btn');
+    const statusText = document.getElementById('overlay-status');
+    const overlay = document.getElementById('broadcast-overlay');
+
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+    statusText.textContent = '🛑 Cancelling broadcast...';
+
+    try {
+        const res = await fetch('/api/broadcast/stop', { method: 'POST' });
+        const result = await res.json();
+        if (result.success) {
+            showToast('Broadcast cancellation requested', 'info');
+            // Optionally hide overlay immediately or wait for polling to catch up
+            overlay.style.display = 'none';
+            await loadNotes(); // Refresh queue
+        } else {
+            showToast(`Failed to stop broadcast: ${result.error}`, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Stop Broadcast';
+        }
+    } catch (err) {
+        console.error('Failed to stop broadcast:', err);
+        showToast('Error stopping broadcast', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Stop Broadcast';
     }
 }
 

@@ -2283,9 +2283,15 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
             platforms
         });
 
+        stopBatchBroadcast = false;
+
         // Process in background
         (async () => {
             for (let i = 0; i < tweets.length; i++) {
+                if (stopBatchBroadcast) {
+                    console.log('🛑 Batch broadcast cancelled by user');
+                    break;
+                }
                 const tweet = tweets[i];
                 const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
 
@@ -2434,6 +2440,12 @@ app.post('/api/broadcast/custom', async (req, res) => {
         console.error('Custom broadcast error:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+// Stop an ongoing batch broadcast
+app.post('/api/broadcast/stop', (req, res) => {
+    stopBatchBroadcast = true;
+    res.json({ success: true, message: 'Broadcast termination requested' });
 });
 
 // Broadcast a single tweet to multiple platforms
