@@ -294,7 +294,7 @@ async function broadcastAll() {
 
     const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
     if (!confirm(
-        `🚀 Broadcast ${exportLimit > 0 ? 'TOP ' + exportLimit : 'ALL'} ${activePostsLength} posts to:\n${platformNames}\n\n` +
+        `🚀 Broadcast ${exportLimit > 0 ? 'the top ' + exportLimit : 'all ' + activePostsLength} posts to:\n${platformNames}\n\n` +
         `This will post with 30s delays between items.\nTotal time: ~${Math.ceil(activePostsLength * 0.5)} minutes\n\nAre you sure?`
     )) return;
 
