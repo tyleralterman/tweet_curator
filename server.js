@@ -2246,180 +2246,6 @@ app.get('/api/broadcast/bluesky/debug', async (req, res) => {
     }
 });
 
-// Broadcast a single tweet to multiple platforms
-app.post('/api/broadcast/multi/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { platforms } = req.body; // e.g. ['bluesky', 'linkedin', 'threads']
-
-        if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
-            return res.status(400).json({ error: 'platforms array required' });
-        }
-
-        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
-        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
-
-        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
-        const results = {};
-
-        const logBroadcast = (platform, success, postId, errorMsg) => {
-            db.prepare(`
-                INSERT INTO broadcast_history (tweet_id, platform, external_post_id, success, error_message)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(id, platform, postId || null, success ? 1 : 0, errorMsg || null);
-        };
-
-        for (const platform of platforms) {
-            try {
-                switch (platform) {
-                    case 'bluesky': {
-                        const api = new BlueskyAPI();
-                        let result;
-                        for (let attempt = 1; attempt <= 3; attempt++) {
-                            try {
-                                result = await api.post(text);
-                                break;
-                            } catch (retryErr) {
-                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
-                                    console.log(`⏳ Bluesky post retry ${attempt}/3 in ${attempt * 3}s...`);
-                                    await new Promise(r => setTimeout(r, attempt * 3000));
-                                    api.resetLogin();
-                                    continue;
-                                }
-                                throw retryErr;
-                            }
-                        }
-                        logBroadcast('bluesky', true, result.uri);
-                        results.bluesky = { success: true, uri: result.uri };
-                        break;
-                    }
-                    case 'linkedin': {
-                        const api = new LinkedInAPI();
-                        const result = await api.createPost(text);
-                        logBroadcast('linkedin', true, result.id);
-                        results.linkedin = { success: true, postId: result.id };
-                        break;
-                    }
-                    case 'threads': {
-                        if (text.length > 500) {
-                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
-                        }
-                        const api = new ThreadsAPI();
-                        await api.getProfile(); // Populates userId required for createPost
-                        const result = await api.createPost(text);
-                        logBroadcast('threads', true, result.postId);
-                        results.threads = { success: true, postId: result.postId };
-                        break;
-                    }
-                    default:
-                        results[platform] = { success: false, error: 'Unknown platform' };
-                }
-            } catch (err) {
-                console.error(`Broadcast to ${platform} failed:`, err.message);
-                logBroadcast(platform, false, null, err.message);
-                results[platform] = { success: false, error: err.message };
-            }
-        }
-
-        const successCount = Object.values(results).filter(r => r.success).length;
-
-        // If at least one broadcast succeeded, remove from the broadcast queue and tag as posted
-        if (successCount > 0) {
-            const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
-            if (readyTagId) {
-                // Ensure broadcast-posted tag exists
-                db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-posted', 'use');
-                const postedTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted').id;
-
-                db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(id, readyTagId);
-                db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(id, postedTagId, 'manual');
-                console.log(`✅ Replaced broadcast-ready tag with broadcast-posted for tweet ${id}`);
-            }
-        }
-
-        res.json({
-            success: successCount > 0,
-            total: platforms.length,
-            successful: successCount,
-            failed: platforms.length - successCount,
-            results
-        });
-    } catch (err) {
-        console.error('Multi-broadcast error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-// Broadcast custom text (from Chrome Extension) to platforms
-app.post('/api/broadcast/custom', async (req, res) => {
-    try {
-        const { text, platforms } = req.body;
-        if (!text || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
-            return res.status(400).json({ error: 'text string and platforms array required' });
-        }
-
-        const results = {};
-
-        for (const platform of platforms) {
-            try {
-                switch (platform) {
-                    case 'bluesky': {
-                        const api = new BlueskyAPI();
-                        let result;
-                        for (let attempt = 1; attempt <= 3; attempt++) {
-                            try {
-                                result = await api.post(text);
-                                break;
-                            } catch (retryErr) {
-                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
-                                    await new Promise(r => setTimeout(r, attempt * 3000));
-                                    api.resetLogin();
-                                    continue;
-                                }
-                                throw retryErr;
-                            }
-                        }
-                        results.bluesky = { success: true, uri: result.uri };
-                        break;
-                    }
-                    case 'linkedin': {
-                        const api = new LinkedInAPI();
-                        const result = await api.createPost(text);
-                        results.linkedin = { success: true, postId: result.id };
-                        break;
-                    }
-                    case 'threads': {
-                        if (text.length > 500) {
-                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
-                        }
-                        const api = new ThreadsAPI();
-                        await api.getProfile();
-                        const result = await api.createPost(text);
-                        results.threads = { success: true, postId: result.postId };
-                        break;
-                    }
-                    default:
-                        results[platform] = { success: false, error: 'Unknown platform' };
-                }
-            } catch (err) {
-                console.error(`Custom broadcast to ${platform} failed:`, err.message);
-                results[platform] = { success: false, error: err.message };
-            }
-        }
-
-        const successCount = Object.values(results).filter(r => r.success).length;
-        res.json({
-            success: successCount > 0,
-            total: platforms.length,
-            successful: successCount,
-            failed: platforms.length - successCount,
-            results
-        });
-    } catch (err) {
-        console.error('Custom broadcast error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // Batch broadcast entire queue to selected platforms
 app.post('/api/broadcast/multi/batch', async (req, res) => {
     try {
@@ -2538,6 +2364,182 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// Broadcast custom text (from Chrome Extension) to platforms
+app.post('/api/broadcast/custom', async (req, res) => {
+    try {
+        const { text, platforms } = req.body;
+        if (!text || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'text string and platforms array required' });
+        }
+
+        const results = {};
+
+        for (const platform of platforms) {
+            try {
+                switch (platform) {
+                    case 'bluesky': {
+                        const api = new BlueskyAPI();
+                        let result;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                result = await api.post(text);
+                                break;
+                            } catch (retryErr) {
+                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                    await new Promise(r => setTimeout(r, attempt * 3000));
+                                    api.resetLogin();
+                                    continue;
+                                }
+                                throw retryErr;
+                            }
+                        }
+                        results.bluesky = { success: true, uri: result.uri };
+                        break;
+                    }
+                    case 'linkedin': {
+                        const api = new LinkedInAPI();
+                        const result = await api.createPost(text);
+                        results.linkedin = { success: true, postId: result.id };
+                        break;
+                    }
+                    case 'threads': {
+                        if (text.length > 500) {
+                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
+                        }
+                        const api = new ThreadsAPI();
+                        await api.getProfile();
+                        const result = await api.createPost(text);
+                        results.threads = { success: true, postId: result.postId };
+                        break;
+                    }
+                    default:
+                        results[platform] = { success: false, error: 'Unknown platform' };
+                }
+            } catch (err) {
+                console.error(`Custom broadcast to ${platform} failed:`, err.message);
+                results[platform] = { success: false, error: err.message };
+            }
+        }
+
+        const successCount = Object.values(results).filter(r => r.success).length;
+        res.json({
+            success: successCount > 0,
+            total: platforms.length,
+            successful: successCount,
+            failed: platforms.length - successCount,
+            results
+        });
+    } catch (err) {
+        console.error('Custom broadcast error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Broadcast a single tweet to multiple platforms
+app.post('/api/broadcast/multi/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { platforms } = req.body; // e.g. ['bluesky', 'linkedin', 'threads']
+
+        if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'platforms array required' });
+        }
+
+        const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
+        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
+
+        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        const results = {};
+
+        const logBroadcast = (platform, success, postId, errorMsg) => {
+            db.prepare(`
+                INSERT INTO broadcast_history (tweet_id, platform, external_post_id, success, error_message)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(id, platform, postId || null, success ? 1 : 0, errorMsg || null);
+        };
+
+        for (const platform of platforms) {
+            try {
+                switch (platform) {
+                    case 'bluesky': {
+                        const api = new BlueskyAPI();
+                        let result;
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                result = await api.post(text);
+                                break;
+                            } catch (retryErr) {
+                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                    console.log(`⏳ Bluesky post retry ${attempt}/3 in ${attempt * 3}s...`);
+                                    await new Promise(r => setTimeout(r, attempt * 3000));
+                                    api.resetLogin();
+                                    continue;
+                                }
+                                throw retryErr;
+                            }
+                        }
+                        logBroadcast('bluesky', true, result.uri);
+                        results.bluesky = { success: true, uri: result.uri };
+                        break;
+                    }
+                    case 'linkedin': {
+                        const api = new LinkedInAPI();
+                        const result = await api.createPost(text);
+                        logBroadcast('linkedin', true, result.id);
+                        results.linkedin = { success: true, postId: result.id };
+                        break;
+                    }
+                    case 'threads': {
+                        if (text.length > 500) {
+                            throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
+                        }
+                        const api = new ThreadsAPI();
+                        await api.getProfile(); // Populates userId required for createPost
+                        const result = await api.createPost(text);
+                        logBroadcast('threads', true, result.postId);
+                        results.threads = { success: true, postId: result.postId };
+                        break;
+                    }
+                    default:
+                        results[platform] = { success: false, error: 'Unknown platform' };
+                }
+            } catch (err) {
+                console.error(`Broadcast to ${platform} failed:`, err.message);
+                logBroadcast(platform, false, null, err.message);
+                results[platform] = { success: false, error: err.message };
+            }
+        }
+
+        const successCount = Object.values(results).filter(r => r.success).length;
+
+        // If at least one broadcast succeeded, remove from the broadcast queue and tag as posted
+        if (successCount > 0) {
+            const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
+            if (readyTagId) {
+                // Ensure broadcast-posted tag exists
+                db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-posted', 'use');
+                const postedTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted').id;
+
+                db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(id, readyTagId);
+                db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(id, postedTagId, 'manual');
+                console.log(`✅ Replaced broadcast-ready tag with broadcast-posted for tweet ${id}`);
+            }
+        }
+
+        res.json({
+            success: successCount > 0,
+            total: platforms.length,
+            successful: successCount,
+            failed: platforms.length - successCount,
+            results
+        });
+    } catch (err) {
+        console.error('Multi-broadcast error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // Get broadcast history for a tweet
 app.get('/api/broadcast/history/:id', (req, res) => {
