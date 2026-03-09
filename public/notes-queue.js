@@ -134,14 +134,27 @@ function renderNotes() {
     notesList.innerHTML = posts.map((post, index) => {
         const text = post.cleaned_text || post.full_text;
         const charCount = text.length;
-        const charClass = charCount > 300 ? 'error' : charCount > 250 ? 'warning' : '';
+        const charClass = charCount > 500 ? 'error' : charCount > 300 ? 'warning' : '';
         const history = broadcastHistory[post.id] || [];
 
-        // Build broadcast badges
+        // Platform char limit warnings
+        const limitWarnings = [];
+        if (charCount > 300) limitWarnings.push('🦋 >300');
+        if (charCount > 500) limitWarnings.push('🧵 >500');
+        const limitWarningHtml = limitWarnings.length > 0
+            ? `<span class="char-limit-warnings" title="Will be skipped on platforms with lower limits">${limitWarnings.join(' ')}</span>`
+            : '';
+
+        // Build broadcast badges — show both successes and failures
         const badges = history.map(h => {
             const icon = PLATFORMS[h.platform]?.icon || '📡';
-            const cls = h.success ? 'success' : 'failed';
-            return `<span class="broadcast-badge ${cls}" title="${h.platform}: ${h.success ? 'sent' : 'failed'} ${h.posted_at || ''}">${icon}✓</span>`;
+            if (h.success) {
+                return `<span class="broadcast-badge success" title="${h.platform}: sent ${h.posted_at || ''}">${icon}✓</span>`;
+            } else {
+                const reason = h.error_message || 'failed';
+                const shortReason = reason.includes('exceeds') ? 'too long' : reason.includes('rate') ? 'rate limited' : 'failed';
+                return `<span class="broadcast-badge failed" title="${h.platform}: ${reason}">${icon}✗ ${shortReason}</span>`;
+            }
         }).join('');
 
         // Per-card platform toggles
@@ -164,7 +177,7 @@ function renderNotes() {
                         <p class="note-text">${escapeHtml(text)}</p>
                         <div class="note-meta">
                             <span class="note-char-count ${charClass}">
-                                ${charCount} chars ${charCount > 300 ? '⚠️' : ''}
+                                ${charCount} chars ${limitWarningHtml}
                             </span>
                             <span>ID: ${post.id.substring(0, 12)}…</span>
                             ${badges ? `<div class="broadcast-badges">${badges}</div>` : ''}

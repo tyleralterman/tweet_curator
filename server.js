@@ -192,6 +192,20 @@ try {
     `);
     console.log('✅ broadcast_history table ready');
 
+    // Create broadcast_queue table for background scheduling
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS broadcast_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tweet_id TEXT NOT NULL,
+            platforms TEXT NOT NULL,
+            scheduled_at DATETIME,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            error_message TEXT
+        )
+    `);
+    console.log('✅ broadcast_queue table ready');
+
     // Migrate old 'substack-ready' tag to 'broadcast-ready'
     const oldTag = db.prepare("SELECT id FROM tags WHERE name = 'substack-ready'").get();
     if (oldTag) {
@@ -1255,8 +1269,8 @@ function cleanContent(text) {
     // Capitalize "I"
     cleaned = cleaned.replace(/\bi\b/g, 'I');
 
-    // Capitalize start of sentences
-    cleaned = cleaned.replace(/\.\s+([a-z])/g, (match, p1) => '. ' + p1.toUpperCase());
+    // Capitalize start of sentences (while preserving line breaks)
+    cleaned = cleaned.replace(/\.(\s+)([a-z])/g, (match, p1, p2) => '.' + p1 + p2.toUpperCase());
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 
     // Remove @ mentions
@@ -1284,9 +1298,9 @@ app.get('/api/scheduler/queue', (req, res) => {
         `;
         const tweets = db.prepare(query).all();
 
-        // Use stored blog_text logic
+        // Use stored blog_text logic, prioritize it over full_text. Omit combined_text.
         tweets.forEach(t => {
-            t.cleaned_text = t.blog_text || cleanContent(t.combined_text || t.full_text);
+            t.cleaned_text = t.blog_text || cleanContent(t.full_text);
         });
 
         res.json(tweets);
@@ -1408,7 +1422,7 @@ app.post('/api/scheduler/push-to-substack/:id', async (req, res) => {
         } catch (e) { }
 
         // Get body content
-        const bodyContent = tweet.blog_text || cleanContent(tweet.combined_text || tweet.full_text);
+        const bodyContent = tweet.blog_text || cleanContent(tweet.full_text);
 
         // Check if already scheduled on Substack
         const existing = db.prepare('SELECT id, substack_post_id FROM substack_blog_queue WHERE tweet_id = ? AND status IN (?, ?)').get(id, 'scheduled', 'posted');
@@ -1774,7 +1788,7 @@ app.get('/api/notes/preview-export', (req, res) => {
             scheduledDate.setHours(9 + slotInDay * 4, 0, 0, 0);
 
             return {
-                text: cleanContent(tweet.combined_text || tweet.full_text).substring(0, 100) + '...',
+                text: cleanContent(tweet.full_text).substring(0, 100) + '...',
                 scheduledAt: scheduledDate.toISOString().slice(0, 16),
                 dayNumber: dayOffset + 1,
                 slotInDay: slotInDay + 1
@@ -2020,7 +2034,7 @@ app.post('/api/broadcast/threads/:id', async (req, res) => {
         }
 
         // Threads has 500 char limit
-        let text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        let text = cleanContent(tweet.blog_text || tweet.full_text);
         if (text.length > 500) {
             text = text.substring(0, 497) + '...';
         }
@@ -2133,7 +2147,7 @@ app.post('/api/broadcast/instagram/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        const text = cleanContent(tweet.blog_text || tweet.full_text);
 
         const api = new InstagramAPI();
         const result = await api.postQuoteCard(text, text, id);
@@ -2153,7 +2167,7 @@ app.get('/api/broadcast/instagram/preview/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        const text = cleanContent(tweet.blog_text || tweet.full_text);
 
         const api = new InstagramAPI();
         const imagePath = await api.generateQuoteCard(text, 'Tyler Alterman', id);
@@ -2250,7 +2264,6 @@ app.get('/api/broadcast/bluesky/debug', async (req, res) => {
 app.post('/api/broadcast/multi/batch', async (req, res) => {
     try {
         const { platforms, exportLimit } = req.body;
-        const delayMs = parseInt(req.query.delay) || 30000; // 30s between posts
 
         if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
             return res.status(400).json({ error: 'platforms array required' });
@@ -2275,98 +2288,64 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
             return res.status(400).json({ error: 'No posts in broadcast queue' });
         }
 
-        // Send response immediately, process in background
+        // Get the latest scheduled date in the queue
+        const latestQuery = db.prepare(`SELECT MAX(scheduled_at) as latest FROM broadcast_queue WHERE status IN ('pending', 'processing')`).get();
+
+        let startSlot = new Date();
+        if (latestQuery.latest) {
+            const nextFromLatest = new Date(latestQuery.latest);
+            // If the latest scheduled post is in the future, start scheduling after it
+            if (nextFromLatest > startSlot) {
+                startSlot = nextFromLatest;
+                // Move explicitly to next logical slot 
+                startSlot.setHours(startSlot.getHours() + 1);
+            }
+        }
+
+        const scheduleSlots = [9, 12, 17]; // 9am, 12pm, 5pm local server time
+
+        const getNextValidSlot = (afterDate) => {
+            const date = new Date(afterDate);
+            while (true) {
+                for (let hour of scheduleSlots) {
+                    if (date.getHours() < hour || (date.getHours() === hour && date.getMinutes() === 0 && date.getSeconds() === 0)) {
+                        date.setHours(hour, 0, 0, 0);
+                        return date;
+                    }
+                }
+                // Move to next day
+                date.setDate(date.getDate() + 1);
+                date.setHours(0, 0, 0, 0);
+            }
+        };
+
+        let currentSlot = getNextValidSlot(startSlot);
+
+        const insertStmt = db.prepare(`
+            INSERT INTO broadcast_queue (tweet_id, platforms, scheduled_at, status)
+            VALUES (?, ?, ?, 'pending')
+        `);
+
+        db.transaction(() => {
+            for (let i = 0; i < tweets.length; i++) {
+                const tweet = tweets[i];
+                insertStmt.run(tweet.id, JSON.stringify(platforms), currentSlot.toISOString());
+
+                // Move to next slot
+                const nextDate = new Date(currentSlot.getTime() + 1000); // add 1 sec to bump past current slot
+                currentSlot = getNextValidSlot(nextDate);
+            }
+        })();
+
         res.json({
             success: true,
-            message: `Broadcasting ${tweets.length} posts to ${platforms.join(', ')} with ${delayMs / 1000}s delays`,
+            message: `Queued ${tweets.length} posts for background scheduling (9am, 12pm, 5pm)`,
             total: tweets.length,
             platforms
         });
 
-        stopBatchBroadcast = false;
-
-        // Process in background
-        (async () => {
-            for (let i = 0; i < tweets.length; i++) {
-                if (stopBatchBroadcast) {
-                    console.log('🛑 Batch broadcast cancelled by user');
-                    break;
-                }
-                const tweet = tweets[i];
-                const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
-
-                for (const platform of platforms) {
-                    try {
-                        switch (platform) {
-                            case 'bluesky': {
-                                const api = new BlueskyAPI();
-                                for (let attempt = 1; attempt <= 3; attempt++) {
-                                    try {
-                                        await api.post(text);
-                                        break;
-                                    } catch (retryErr) {
-                                        if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
-                                            await new Promise(r => setTimeout(r, attempt * 3000));
-                                            api.resetLogin();
-                                            continue;
-                                        }
-                                        throw retryErr;
-                                    }
-                                }
-                                break;
-                            }
-                            case 'linkedin': {
-                                const api = new LinkedInAPI();
-                                await api.createPost(text);
-                                break;
-                            }
-                            case 'threads': {
-                                if (text.length > 500) {
-                                    throw new Error(`Text exceeds Threads limit of 500 characters (length: ${text.length}). Post skipped.`);
-                                }
-                                const api = new ThreadsAPI();
-                                await api.getProfile(); // Populates userId required for createPost
-                                await api.createPost(text);
-                                break;
-                            }
-                        }
-                        db.prepare(`
-                            INSERT INTO broadcast_history (tweet_id, platform, success)
-                            VALUES (?, ?, 1)
-                        `).run(tweet.id, platform);
-                        console.log(`📡 [${i + 1}/${tweets.length}] Broadcasted to ${platform}`);
-                    } catch (err) {
-                        db.prepare(`
-                            INSERT INTO broadcast_history (tweet_id, platform, success, error_message)
-                            VALUES (?, ?, 0, ?)
-                        `).run(tweet.id, platform, err.message);
-                        console.error(`❌ [${i + 1}/${tweets.length}] Failed ${platform}:`, err.message);
-                    }
-                }
-
-                // If at least one broadcast succeeded for this tweet, update tags
-                const historyCount = db.prepare('SELECT COUNT(*) as count FROM broadcast_history WHERE tweet_id = ? AND success = 1').get(tweet.id).count;
-                if (historyCount > 0) {
-                    const readyTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready')?.id;
-                    if (readyTagId) {
-                        // Ensure broadcast-posted tag exists
-                        db.prepare('INSERT OR IGNORE INTO tags (name, category) VALUES (?, ?)').run('broadcast-posted', 'use');
-                        const postedTagId = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted').id;
-
-                        db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(tweet.id, readyTagId);
-                        db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(tweet.id, postedTagId, 'manual');
-                    }
-                }
-
-                // Delay between posts (not after the last one)
-                if (i < tweets.length - 1) {
-                    await new Promise(r => setTimeout(r, delayMs));
-                }
-            }
-            console.log('✅ Batch broadcast complete');
-        })();
     } catch (err) {
-        console.error('Batch broadcast error:', err);
+        console.error('Batch queueing error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -2392,7 +2371,10 @@ app.post('/api/broadcast/custom', async (req, res) => {
                                 result = await api.post(text);
                                 break;
                             } catch (retryErr) {
-                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
+                                const errMsg = retryErr.message?.toLowerCase() || '';
+                                const isRetryable = errMsg.includes('rate limit') || errMsg.includes('auth') || errMsg.includes('token') || errMsg.includes('expired') || retryErr.status === 401 || retryErr.status === 429;
+                                if (isRetryable && attempt < 3) {
+                                    console.log(`⏳ Bluesky issue (${retryErr.message}), retrying ${attempt}/3...`);
                                     await new Promise(r => setTimeout(r, attempt * 3000));
                                     api.resetLogin();
                                     continue;
@@ -2461,7 +2443,8 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        const text = cleanContent(tweet.blog_text || tweet.combined_text || tweet.full_text);
+        // Use full_text instead of combined_text to avoid thread truncation on social platforms
+        const text = cleanContent(tweet.blog_text || tweet.full_text);
         const results = {};
 
         const logBroadcast = (platform, success, postId, errorMsg) => {
@@ -2482,8 +2465,10 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
                                 result = await api.post(text);
                                 break;
                             } catch (retryErr) {
-                                if (retryErr.message?.includes('Rate Limit') && attempt < 3) {
-                                    console.log(`⏳ Bluesky post retry ${attempt}/3 in ${attempt * 3}s...`);
+                                const errMsg = retryErr.message?.toLowerCase() || '';
+                                const isRetryable = errMsg.includes('rate limit') || errMsg.includes('auth') || errMsg.includes('token') || errMsg.includes('expired') || retryErr.status === 401 || retryErr.status === 429;
+                                if (isRetryable && attempt < 3) {
+                                    console.log(`⏳ Bluesky issue (${retryErr.message}), retrying ${attempt}/3...`);
                                     await new Promise(r => setTimeout(r, attempt * 3000));
                                     api.resetLogin();
                                     continue;
@@ -2575,7 +2560,6 @@ app.get('/api/broadcast/history', (req, res) => {
         const history = db.prepare(`
             SELECT tweet_id, platform, posted_at, success, error_message
             FROM broadcast_history
-            WHERE success = 1
             ORDER BY posted_at DESC
         `).all();
 
@@ -3492,6 +3476,124 @@ app.listen(PORT, () => {
         cron.schedule('30 2 * * *', runPoster); // 8:30 PM CST (next day UTC)
 
         console.log('✅ Substack posting scheduled: 9AM, 1PM, 8:30PM CST');
+    }
+
+    // Set up Social Broadcast Queue Processor
+    if (cron) {
+        console.log('📅 Setting up automated Broadcast Queue processor...');
+
+        const processBroadcastQueue = async () => {
+            try {
+                // Find all pending posts whose time has passed
+                const pendingPosts = db.prepare(`
+                    SELECT * FROM broadcast_queue 
+                    WHERE status = 'pending' AND scheduled_at <= datetime('now')
+                    ORDER BY scheduled_at ASC
+                `).all();
+
+                if (pendingPosts.length === 0) return;
+
+                console.log(`📡 Processing ${pendingPosts.length} scheduled broadcasts...`);
+
+                for (const job of pendingPosts) {
+                    // Mark as processing
+                    db.prepare("UPDATE broadcast_queue SET status = 'processing' WHERE id = ?").run(job.id);
+
+                    const tweet = db.prepare('SELECT full_text, blog_text FROM tweets WHERE id = ?').get(job.tweet_id);
+                    if (!tweet) {
+                        db.prepare("UPDATE broadcast_queue SET status = 'failed', error_message = 'Tweet not found' WHERE id = ?").run(job.id);
+                        continue;
+                    }
+
+                    const platforms = JSON.parse(job.platforms);
+                    const text = cleanContent(tweet.blog_text || tweet.full_text);
+                    let allSuccess = true;
+                    let errorMessages = [];
+
+                    for (const platform of platforms) {
+                        try {
+                            switch (platform) {
+                                case 'bluesky': {
+                                    const BlueskyAPI = require('./utils/bluesky-api');
+                                    const api = new BlueskyAPI();
+                                    for (let attempt = 1; attempt <= 3; attempt++) {
+                                        try {
+                                            await api.post(text);
+                                            break;
+                                        } catch (retryErr) {
+                                            const errMsg = retryErr.message?.toLowerCase() || '';
+                                            const isRetryable = errMsg.includes('rate limit') || errMsg.includes('auth') || errMsg.includes('token') || errMsg.includes('expired') || retryErr.status === 401 || retryErr.status === 429;
+                                            if (isRetryable && attempt < 3) {
+                                                console.log(`⏳ Bluesky issue (${retryErr.message}), retrying ${attempt}/3...`);
+                                                await new Promise(r => setTimeout(r, attempt * 3000));
+                                                api.resetLogin();
+                                                continue;
+                                            }
+                                            throw retryErr;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 'linkedin': {
+                                    const LinkedInAPI = require('./utils/linkedin-api');
+                                    const api = new LinkedInAPI();
+                                    await api.createPost(text);
+                                    break;
+                                }
+                                case 'threads': {
+                                    if (text.length > 500) {
+                                        throw new Error(`Text exceeds limit of 500 chars. Skipped.`);
+                                    }
+                                    const ThreadsAPI = require('./utils/threads-api');
+                                    const api = new ThreadsAPI();
+                                    await api.getProfile();
+                                    await api.createPost(text);
+                                    break;
+                                }
+                            }
+                            db.prepare(`
+                                INSERT INTO broadcast_history (tweet_id, platform, success)
+                                VALUES (?, ?, 1)
+                            `).run(job.tweet_id, platform);
+                        } catch (err) {
+                            db.prepare(`
+                                INSERT INTO broadcast_history (tweet_id, platform, success, error_message)
+                                VALUES (?, ?, 0, ?)
+                            `).run(job.tweet_id, platform, err.message);
+                            allSuccess = false;
+                            errorMessages.push(`[${platform}] ${err.message}`);
+                        }
+                    }
+
+                    // Update tags if at least one success
+                    const historyCount = db.prepare('SELECT COUNT(*) as count FROM broadcast_history WHERE tweet_id = ? AND success = 1').get(job.tweet_id).count;
+                    if (historyCount > 0) {
+                        const readyTag = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-ready');
+                        const postedTag = db.prepare('SELECT id FROM tags WHERE name = ?').get('broadcast-posted');
+
+                        if (readyTag && postedTag) {
+                            db.prepare('DELETE FROM tweet_tags WHERE tweet_id = ? AND tag_id = ?').run(job.tweet_id, readyTag.id);
+                            db.prepare('INSERT OR REPLACE INTO tweet_tags (tweet_id, tag_id, source) VALUES (?, ?, ?)').run(job.tweet_id, postedTag.id, 'manual');
+                        }
+                    }
+
+                    // Mark job complete/failed
+                    const finalStatus = allSuccess ? 'completed' : 'failed';
+                    const finalError = errorMessages.length > 0 ? errorMessages.join(' | ') : null;
+                    db.prepare("UPDATE broadcast_queue SET status = ?, error_message = ? WHERE id = ?").run(finalStatus, finalError, job.id);
+
+                    // Delay between processing multiple scheduled posts natively
+                    await new Promise(r => setTimeout(r, 10000));
+                }
+
+            } catch (err) {
+                console.error("Cron Error processing broadcast queue:", err);
+            }
+        };
+
+        // Run processor every 5 minutes to check for pending posts that just hit their schedule time
+        cron.schedule('*/5 * * * *', processBroadcastQueue);
+        console.log('✅ Social Broadcast processor scheduled (runs every 5m)');
     }
 });
 

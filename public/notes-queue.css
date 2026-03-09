@@ -463,6 +463,14 @@
 .broadcast-badge.failed {
     background: rgba(255, 100, 100, 0.15);
     color: #ff6464;
+    cursor: help;
+}
+
+.char-limit-warnings {
+    margin-left: 4px;
+    font-size: 10px;
+    opacity: 0.8;
+    cursor: help;
 }
 
 /* Card Bottom Row - Broadcast Controls */
