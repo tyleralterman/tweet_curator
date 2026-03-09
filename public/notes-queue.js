@@ -289,6 +289,19 @@ async function broadcastSingle(id) {
     }
 }
 
+/**
+ * Read scheduling options from the UI dropdowns + browser timezone
+ */
+function getSchedulingOptions() {
+    return {
+        startDays: parseInt(document.getElementById('start-days').value) || 0,
+        perDay: parseInt(document.getElementById('notes-per-day').value) || 3,
+        hoursStart: parseInt(document.getElementById('hours-start').value) || 9,
+        hoursEnd: parseInt(document.getElementById('hours-end').value) || 21,
+        tzOffsetMinutes: new Date().getTimezoneOffset() // e.g. 360 for CST (UTC-6)
+    };
+}
+
 async function testBroadcast() {
     const platforms = getEnabledPlatforms().filter(p => platformStatus[p]?.connected);
 
@@ -302,18 +315,19 @@ async function testBroadcast() {
         return;
     }
 
+    const schedule = getSchedulingOptions();
     const testCount = Math.min(3, posts.length);
     const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
     if (!confirm(
         `🧪 Test broadcast the top ${testCount} posts to:\n${platformNames}\n\n` +
-        `These will be added to the background queue (9am, 12pm, 5pm daily).\n\nProceed?`
+        `Scheduled ${schedule.perDay}/day at ${schedule.hoursStart > 12 ? (schedule.hoursStart - 12) + ' PM' : schedule.hoursStart + ' AM'}–${schedule.hoursEnd > 12 ? (schedule.hoursEnd - 12) + ' PM' : schedule.hoursEnd + ' AM'}, starting ${schedule.startDays === 0 ? 'today' : schedule.startDays === 1 ? 'tomorrow' : 'in ' + schedule.startDays + ' days'}.\n\nProceed?`
     )) return;
 
     try {
         const res = await fetch('/api/broadcast/multi/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ platforms, exportLimit: 3 })
+            body: JSON.stringify({ platforms, exportLimit: 3, ...schedule })
         });
         const result = await res.json();
 
@@ -344,25 +358,26 @@ async function broadcastAll() {
         return;
     }
 
+    const schedule = getSchedulingOptions();
     const activePostsLength = exportLimit > 0 ? Math.min(exportLimit, posts.length) : posts.length;
+    const totalDays = Math.ceil(activePostsLength / schedule.perDay);
 
     const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
     if (!confirm(
         `🚀 Schedule ${exportLimit > 0 ? 'the top ' + exportLimit : 'all ' + activePostsLength} posts to:\n${platformNames}\n\n` +
-        `This will add posts to the background queue, which automatically posts at 9am, 12pm, and 5pm daily.\n\nAre you sure?`
+        `${schedule.perDay}/day over ~${totalDays} days, starting ${schedule.startDays === 0 ? 'today' : schedule.startDays === 1 ? 'tomorrow' : 'in ' + schedule.startDays + ' days'}.\n\nAre you sure?`
     )) return;
 
     try {
         const res = await fetch('/api/broadcast/multi/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ platforms, exportLimit })
+            body: JSON.stringify({ platforms, exportLimit, ...schedule })
         });
         const result = await res.json();
 
         if (result.success) {
             showToast(`✅ ${result.message}`, 'success');
-            // Hide queue entries that were scheduled
             setTimeout(async () => {
                 await loadNotes();
             }, 1000);

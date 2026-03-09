@@ -39,13 +39,23 @@ function createAgent() {
 
 class BlueskyAPI {
     constructor(handle = null, appPassword = null) {
-        this.handle = handle || process.env.BLUESKY_HANDLE;
-        this.appPassword = appPassword || process.env.BLUESKY_APP_PASSWORD;
+        this.handle = BlueskyAPI.sanitize(handle || process.env.BLUESKY_HANDLE || '');
+        this.appPassword = (appPassword || process.env.BLUESKY_APP_PASSWORD || '').trim();
 
         if (!globalAgent) {
             globalAgent = createAgent();
         }
         this.agent = globalAgent;
+    }
+
+    /**
+     * Strip invisible unicode, directional marks, @-prefix, and whitespace from a handle
+     */
+    static sanitize(str) {
+        return str
+            .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+            .replace(/^@/, '')
+            .trim();
     }
 
     /**

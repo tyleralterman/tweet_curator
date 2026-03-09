@@ -2263,7 +2263,7 @@ app.get('/api/broadcast/bluesky/debug', async (req, res) => {
 // Batch broadcast entire queue to selected platforms
 app.post('/api/broadcast/multi/batch', async (req, res) => {
     try {
-        const { platforms, exportLimit } = req.body;
+        const { platforms, exportLimit, startDays, perDay, hoursStart, hoursEnd, tzOffsetMinutes } = req.body;
 
         if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
             return res.status(400).json({ error: 'platforms array required' });
@@ -2288,58 +2288,94 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
             return res.status(400).json({ error: 'No posts in broadcast queue' });
         }
 
-        // Get the latest scheduled date in the queue
-        const latestQuery = db.prepare(`SELECT MAX(scheduled_at) as latest FROM broadcast_queue WHERE status IN ('pending', 'processing')`).get();
+        // Scheduling parameters (from frontend dropdowns + browser timezone)
+        const postsPerDay = Math.max(1, parseInt(perDay) || 3);
+        const localHoursStart = parseInt(hoursStart) || 9;
+        const localHoursEnd = parseInt(hoursEnd) || 21;
+        const daysOffset = parseInt(startDays) || 0;
+        // tzOffsetMinutes: browser's getTimezoneOffset() — positive = west of UTC (e.g. 360 for CST)
+        const tzOffset = parseInt(tzOffsetMinutes) || 360; // default to CST if not provided
 
-        let startSlot = new Date();
-        if (latestQuery.latest) {
-            const nextFromLatest = new Date(latestQuery.latest);
-            // If the latest scheduled post is in the future, start scheduling after it
-            if (nextFromLatest > startSlot) {
-                startSlot = nextFromLatest;
-                // Move explicitly to next logical slot 
-                startSlot.setHours(startSlot.getHours() + 1);
+        // Generate evenly-spaced local hours for the day
+        const generateDailySlots = (count, startHour, endHour) => {
+            if (count === 1) return [startHour];
+            const slots = [];
+            const step = (endHour - startHour) / (count - 1);
+            for (let i = 0; i < count; i++) {
+                slots.push(Math.round(startHour + i * step));
             }
-        }
+            return slots;
+        };
 
-        const scheduleSlots = [9, 12, 17]; // 9am, 12pm, 5pm local server time
+        const dailySlots = generateDailySlots(postsPerDay, localHoursStart, localHoursEnd);
+        console.log(`📅 Scheduling: ${postsPerDay}/day at local hours [${dailySlots}], tzOffset=${tzOffset}min, startDays=${daysOffset}`);
 
+        // Convert local slot hours to UTC
+        const utcSlots = dailySlots.map(h => {
+            let utcHour = h + (tzOffset / 60);
+            if (utcHour >= 24) utcHour -= 24;
+            if (utcHour < 0) utcHour += 24;
+            return Math.round(utcHour);
+        });
+
+        // Determine start date (in UTC, accounting for the day offset)
+        const now = new Date();
+        let startDate = new Date(now);
+        startDate.setUTCDate(startDate.getUTCDate() + daysOffset);
+        startDate.setUTCHours(0, 0, 0, 0);
+
+        // If starting today, skip slots that have already passed
         const getNextValidSlot = (afterDate) => {
             const date = new Date(afterDate);
             while (true) {
-                for (let hour of scheduleSlots) {
-                    if (date.getHours() < hour || (date.getHours() === hour && date.getMinutes() === 0 && date.getSeconds() === 0)) {
-                        date.setHours(hour, 0, 0, 0);
-                        return date;
+                for (const utcHour of utcSlots) {
+                    const candidate = new Date(date);
+                    candidate.setUTCHours(utcHour, 0, 0, 0);
+                    if (candidate > afterDate) {
+                        return candidate;
                     }
                 }
                 // Move to next day
-                date.setDate(date.getDate() + 1);
-                date.setHours(0, 0, 0, 0);
+                date.setUTCDate(date.getUTCDate() + 1);
+                date.setUTCHours(0, 0, 0, 0);
             }
         };
 
-        let currentSlot = getNextValidSlot(startSlot);
+        // Also respect any existing pending items — don't double-book
+        const latestQuery = db.prepare(`SELECT MAX(scheduled_at) as latest FROM broadcast_queue WHERE status IN ('pending', 'processing')`).get();
+        let scheduleAfter = daysOffset > 0 ? startDate : now;
+        if (latestQuery.latest) {
+            const latestExisting = new Date(latestQuery.latest);
+            if (latestExisting > scheduleAfter) {
+                scheduleAfter = latestExisting;
+            }
+        }
+
+        let currentSlot = getNextValidSlot(scheduleAfter);
 
         const insertStmt = db.prepare(`
             INSERT INTO broadcast_queue (tweet_id, platforms, scheduled_at, status)
             VALUES (?, ?, ?, 'pending')
         `);
 
+        let firstSlot = null, lastSlot = null;
         db.transaction(() => {
             for (let i = 0; i < tweets.length; i++) {
                 const tweet = tweets[i];
                 insertStmt.run(tweet.id, JSON.stringify(platforms), currentSlot.toISOString());
-
-                // Move to next slot
-                const nextDate = new Date(currentSlot.getTime() + 1000); // add 1 sec to bump past current slot
-                currentSlot = getNextValidSlot(nextDate);
+                if (i === 0) firstSlot = new Date(currentSlot);
+                lastSlot = new Date(currentSlot);
+                currentSlot = getNextValidSlot(currentSlot);
             }
         })();
 
+        // Format summary for the user
+        const fmtDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const totalDays = Math.ceil(tweets.length / postsPerDay);
+
         res.json({
             success: true,
-            message: `Queued ${tweets.length} posts for background scheduling (9am, 12pm, 5pm)`,
+            message: `Queued ${tweets.length} posts (${postsPerDay}/day over ~${totalDays} days, ${fmtDate(firstSlot)} → ${fmtDate(lastSlot)})`,
             total: tweets.length,
             platforms
         });
