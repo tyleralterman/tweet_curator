@@ -276,6 +276,47 @@ async function broadcastSingle(id) {
     }
 }
 
+async function testBroadcast() {
+    const platforms = getEnabledPlatforms().filter(p => platformStatus[p]?.connected);
+
+    if (platforms.length === 0) {
+        showToast('No connected platforms enabled', 'error');
+        return;
+    }
+
+    if (posts.length === 0) {
+        showToast('No posts in queue', 'error');
+        return;
+    }
+
+    const testCount = Math.min(3, posts.length);
+    const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
+    if (!confirm(
+        `🧪 Test broadcast the top ${testCount} posts to:\n${platformNames}\n\n` +
+        `These will be added to the background queue (9am, 12pm, 5pm daily).\n\nProceed?`
+    )) return;
+
+    try {
+        const res = await fetch('/api/broadcast/multi/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platforms, exportLimit: 3 })
+        });
+        const result = await res.json();
+
+        if (result.success) {
+            showToast(`🧪 ${result.message}`, 'success');
+            setTimeout(async () => {
+                await loadNotes();
+            }, 1000);
+        } else {
+            showToast(`Failed: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+    }
+}
+
 async function broadcastAll() {
     const platforms = getEnabledPlatforms().filter(p => platformStatus[p]?.connected);
     const exportLimit = parseInt(document.getElementById('export-limit').value) || 0;
@@ -294,23 +335,11 @@ async function broadcastAll() {
 
     const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
     if (!confirm(
-        `🚀 Broadcast ${exportLimit > 0 ? 'the top ' + exportLimit : 'all ' + activePostsLength} posts to:\n${platformNames}\n\n` +
-        `This will post with 30s delays between items.\nTotal time: ~${Math.ceil(activePostsLength * 0.5)} minutes\n\nAre you sure?`
+        `🚀 Schedule ${exportLimit > 0 ? 'the top ' + exportLimit : 'all ' + activePostsLength} posts to:\n${platformNames}\n\n` +
+        `This will add posts to the background queue, which automatically posts at 9am, 12pm, and 5pm daily.\n\nAre you sure?`
     )) return;
 
-    // Show progress overlay
-    const overlay = document.getElementById('broadcast-overlay');
-    const progressBar = document.getElementById('overlay-progress');
-    const statusText = document.getElementById('overlay-status');
-    const logEl = document.getElementById('overlay-log');
-
-    overlay.style.display = 'flex';
-    progressBar.style.width = '0%';
-    statusText.textContent = `Broadcasting to ${platformNames}...`;
-    logEl.innerHTML = '';
-
     try {
-        // Kick off batch broadcast (returns immediately)
         const res = await fetch('/api/broadcast/multi/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -319,95 +348,21 @@ async function broadcastAll() {
         const result = await res.json();
 
         if (result.success) {
-            logEl.innerHTML += `<div class="log-info">📡 ${result.message}</div>`;
-
-            // Poll for progress by checking history
-            let completed = 0;
-            const total = activePostsLength * platforms.length;
-            const checkInterval = setInterval(async () => {
-                try {
-                    const histRes = await fetch('/api/broadcast/history');
-                    const newHistory = await histRes.json();
-
-                    // Count new entries
-                    let newCount = 0;
-                    for (const entries of Object.values(newHistory)) {
-                        newCount += entries.length;
-                    }
-
-                    let oldCount = 0;
-                    for (const entries of Object.values(broadcastHistory)) {
-                        oldCount += entries.length;
-                    }
-
-                    completed = newCount - oldCount;
-                    const pct = Math.min(100, Math.round((completed / total) * 100));
-                    progressBar.style.width = `${pct}%`;
-                    statusText.textContent = `${completed}/${total} broadcasts complete (${pct}%)`;
-
-                    if (completed >= total) {
-                        clearInterval(checkInterval);
-                        statusText.textContent = '✅ All broadcasts complete!';
-                        logEl.innerHTML += `<div class="log-success">✅ Done! ${completed} broadcasts sent.</div>`;
-                        progressBar.style.width = '100%';
-
-                        setTimeout(async () => {
-                            overlay.style.display = 'none';
-                            await loadNotes(); // Reload queue so successful posts disappear
-                        }, 2000);
-                    }
-                } catch (err) {
-                    // Polling error, continue
-                }
-            }, 5000);
-
-            // Timeout after 30 min
-            setTimeout(() => {
-                clearInterval(checkInterval);
-                overlay.style.display = 'none';
-                showToast('Broadcast running in background', 'success');
-                loadNotes();
-            }, 30 * 60 * 1000);
+            showToast(`✅ ${result.message}`, 'success');
+            // Hide queue entries that were scheduled
+            setTimeout(async () => {
+                await loadNotes();
+            }, 1000);
         } else {
             showToast(`Failed: ${result.error}`, 'error');
-            overlay.style.display = 'none';
-            stopBtn.style.display = 'none'; // Hide stop button on failure
         }
     } catch (err) {
         showToast(`Error: ${err.message}`, 'error');
-        overlay.style.display = 'none';
-        stopBtn.style.display = 'none'; // Hide stop button on error
     }
 }
 
 async function stopBroadcast() {
-    const btn = document.getElementById('stop-broadcast-btn');
-    const statusText = document.getElementById('overlay-status');
-    const overlay = document.getElementById('broadcast-overlay');
-
-    btn.disabled = true;
-    btn.textContent = 'Stopping...';
-    statusText.textContent = '🛑 Cancelling broadcast...';
-
-    try {
-        const res = await fetch('/api/broadcast/stop', { method: 'POST' });
-        const result = await res.json();
-        if (result.success) {
-            showToast('Broadcast cancellation requested', 'info');
-            // Optionally hide overlay immediately or wait for polling to catch up
-            overlay.style.display = 'none';
-            await loadNotes(); // Refresh queue
-        } else {
-            showToast(`Failed to stop broadcast: ${result.error}`, 'error');
-            btn.disabled = false;
-            btn.textContent = 'Stop Broadcast';
-        }
-    } catch (err) {
-        console.error('Failed to stop broadcast:', err);
-        showToast('Error stopping broadcast', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Stop Broadcast';
-    }
+    showToast('Background broadcasts cannot be stopped from the UI yet. Contact admin.', 'info');
 }
 
 // ============================================

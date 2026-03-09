@@ -23,6 +23,9 @@
             <button id="export-yaml-btn" class="btn-substack" onclick="exportYAML()">
                 <span class="icon">📥</span> Export YAML
             </button>
+            <button id="test-broadcast-btn" class="btn-test-broadcast" onclick="testBroadcast()">
+                <span class="icon">🧪</span> Test Top 3
+            </button>
             <button id="broadcast-all-btn" class="btn-broadcast-all" onclick="broadcastAll()">
                 <span class="icon">🚀</span> Broadcast All
             </button>
@@ -131,12 +134,28 @@
                         </select>
                     </div>
                     <div class="option-group">
-                        <label for="export-limit">Export limit</label>
+                        <label for="export-limit">Post limit</label>
                         <select id="export-limit">
-                            <option value="0" selected>All (1000+)</option>
+                            <option value="1">Top 1 (Test)</option>
+                            <option value="3">Top 3 (Test)</option>
+                            <option value="5">Top 5 (Test)</option>
+                            <option value="10">Top 10</option>
                             <option value="30">Top 30</option>
                             <option value="50">Top 50</option>
                             <option value="100">Top 100</option>
+                            <option value="0" selected>All (1000+)</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label for="post-interval" title="For Broadcast All to social platforms">Broadcast Interval</label>
+                        <select id="post-interval">
+                            <option value="30" selected>30 seconds (Default)</option>
+                            <option value="60">1 minute</option>
+                            <option value="300">5 minutes</option>
+                            <option value="3600">1 hour</option>
+                            <option value="14400">4 hours</option>
+                            <option value="43200">12 hours</option>
+                            <option value="86400">24 hours</option>
                         </select>
                     </div>
                 </div>
