@@ -339,6 +339,7 @@ try {
 }
 
 // Middleware
+app.use(cors());
 // IMPORTANT: Increase payload size for Chrome Extension passing base64 images
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -2294,8 +2295,8 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
         const localHoursStart = parseInt(hoursStart) || 9;
         const localHoursEnd = parseInt(hoursEnd) || 21;
         const daysOffset = parseInt(startDays) || 0;
-        // tzOffsetMinutes: browser's getTimezoneOffset() — positive = west of UTC (e.g. 360 for CST)
-        const tzOffset = parseInt(tzOffsetMinutes) || 360; // default to CST if not provided
+        // tzOffsetMinutes: browser's getTimezoneOffset() — positive = west of UTC (e.g. 240 for ET)
+        const tzOffset = parseInt(tzOffsetMinutes) || 240; // default to ET if not provided
 
         // Generate evenly-spaced local hours for the day
         const generateDailySlots = (count, startHour, endHour) => {
@@ -3503,42 +3504,7 @@ app.listen(PORT, () => {
    Press Ctrl+C to stop
 `);
 
-    // Set up Substack posting cron jobs (only in production with valid config)
-    if (cron && process.env.RENDER && process.env.SUBSTACK_EMAIL) {
-        console.log('📅 Setting up Substack posting schedule...');
-
-        // Helper to run the poster (installs Chrome first to ensure it's available)
-        const runPoster = () => {
-            console.log('📫 Installing Chrome and running Substack poster...');
-            // Install Chrome first, then run poster
-            const install = spawn('npx', ['puppeteer', 'browsers', 'install', 'chrome'], {
-                stdio: 'inherit',
-                env: process.env
-            });
-            install.on('close', (code) => {
-                if (code === 0) {
-                    console.log('📫 Chrome ready, running poster...');
-                    const poster = spawn('node', [path.join(__dirname, 'scripts/substack_poster.js')], {
-                        stdio: 'inherit',
-                        env: process.env
-                    });
-                    poster.on('error', (err) => console.error('Poster error:', err));
-                } else {
-                    console.error('Chrome install failed with code:', code);
-                }
-            });
-            install.on('error', (err) => console.error('Chrome install error:', err));
-        };
-
-        // Schedule: 9:00 AM, 1:00 PM, 8:30 PM CST (UTC-6)
-        // Cron uses server time - Render is UTC, so CST offset needed
-        // CST 9:00 AM = UTC 15:00, CST 1:00 PM = UTC 19:00, CST 8:30 PM = UTC 2:30 (next day)
-        cron.schedule('0 15 * * *', runPoster); // 9 AM CST
-        cron.schedule('0 19 * * *', runPoster); // 1 PM CST
-        cron.schedule('30 2 * * *', runPoster); // 8:30 PM CST (next day UTC)
-
-        console.log('✅ Substack posting scheduled: 9AM, 1PM, 8:30PM CST');
-    }
+    // Legacy Substack Poster cron removed — all broadcasting now handled by the unified Social Broadcast Queue below.
 
     // Set up Social Broadcast Queue Processor
     if (cron) {
