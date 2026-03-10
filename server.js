@@ -339,8 +339,9 @@ try {
 }
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+// IMPORTANT: Increase payload size for Chrome Extension passing base64 images
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -2389,9 +2390,9 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
 // Broadcast custom text (from Chrome Extension) to platforms
 app.post('/api/broadcast/custom', async (req, res) => {
     try {
-        const { text, platforms } = req.body;
-        if (!text || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
-            return res.status(400).json({ error: 'text string and platforms array required' });
+        const { text, imageBase64, platforms } = req.body;
+        if ((!text && !imageBase64) || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
+            return res.status(400).json({ error: 'text / image and platforms array required' });
         }
 
         const results = {};
@@ -2404,7 +2405,7 @@ app.post('/api/broadcast/custom', async (req, res) => {
                         let result;
                         for (let attempt = 1; attempt <= 3; attempt++) {
                             try {
-                                result = await api.post(text);
+                                result = await api.post(text); // API backend doesn't handle Bluesky images locally yet
                                 break;
                             } catch (retryErr) {
                                 const errMsg = retryErr.message?.toLowerCase() || '';
@@ -2423,7 +2424,32 @@ app.post('/api/broadcast/custom', async (req, res) => {
                     }
                     case 'linkedin': {
                         const api = new LinkedInAPI();
-                        const result = await api.createPost(text);
+                        let mediaUrn = null;
+
+                        if (imageBase64) {
+                            try {
+                                // temporarily save base64 to file so LinkedInAPI can readFileSync it
+                                const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+                                const buffer = Buffer.from(base64Data, 'base64');
+                                const tempPath = path.join(__dirname, 'uploads', `temp_${Date.now()}.jpg`);
+
+                                // Make sure uploads dir exists
+                                if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
+                                    fs.mkdirSync(path.join(__dirname, 'uploads'));
+                                }
+
+                                fs.writeFileSync(tempPath, buffer);
+                                mediaUrn = await api.uploadImage(tempPath);
+
+                                // cleanup
+                                fs.unlinkSync(tempPath);
+                            } catch (imgErr) {
+                                console.error('LinkedIn Image Upload Failed:', imgErr);
+                                throw new Error('Image Upload Failed: ' + imgErr.message);
+                            }
+                        }
+
+                        const result = await api.createPost(text || '', mediaUrn);
                         results.linkedin = { success: true, postId: result.id };
                         break;
                     }
