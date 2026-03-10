@@ -101,7 +101,8 @@
                     <div class="option-group">
                         <label for="start-days">Start in</label>
                         <select id="start-days">
-                            <option value="1">Tomorrow</option>
+                            <option value="0">Today</option>
+                            <option value="1" selected>Tomorrow</option>
                             <option value="2">2 days</option>
                             <option value="7">1 week</option>
                         </select>
@@ -160,6 +161,14 @@
                     </div>
                 </div>
                 <div class="schedule-preview" id="schedule-preview"></div>
+                <div class="schedule-actions" style="margin-top: 12px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn-test-broadcast" onclick="testBroadcast()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
+                        🧪 Test Top 3
+                    </button>
+                    <button class="btn-broadcast-all" onclick="broadcastAll()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
+                        🚀 Schedule All
+                    </button>
+                </div>
             </div>
         </div>
 
