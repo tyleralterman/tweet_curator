@@ -2292,24 +2292,17 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
 
         // Scheduling parameters (from frontend dropdowns + browser timezone)
         const postsPerDay = Math.max(1, parseInt(perDay) || 3);
-        const localHoursStart = parseInt(hoursStart) || 9;
-        const localHoursEnd = parseInt(hoursEnd) || 21;
         const daysOffset = parseInt(startDays) || 0;
         // tzOffsetMinutes: browser's getTimezoneOffset() — positive = west of UTC (e.g. 240 for ET)
         const tzOffset = parseInt(tzOffsetMinutes) || 240; // default to ET if not provided
 
-        // Generate evenly-spaced local hours for the day
-        const generateDailySlots = (count, startHour, endHour) => {
-            if (count === 1) return [startHour];
-            const slots = [];
-            const step = (endHour - startHour) / (count - 1);
-            for (let i = 0; i < count; i++) {
-                slots.push(Math.round(startHour + i * step));
-            }
-            return slots;
-        };
-
-        const dailySlots = generateDailySlots(postsPerDay, localHoursStart, localHoursEnd);
+        // Fixed optimal posting times (research-backed for cross-platform engagement):
+        // 9 AM  — Morning peak (commute + work start, LinkedIn algorithm boost)
+        // 12 PM — Lunch break peak (highest engagement window across all platforms)
+        // 6 PM  — Evening wind-down (post-work browsing spike, strong on X + Threads)
+        const defaultSlots = [9, 12, 18];
+        // Allow custom slots from frontend, otherwise use optimal defaults
+        const dailySlots = req.body.customSlots || defaultSlots.slice(0, postsPerDay);
         console.log(`📅 Scheduling: ${postsPerDay}/day at local hours [${dailySlots}], tzOffset=${tzOffset}min, startDays=${daysOffset}`);
 
         // Convert local slot hours to UTC

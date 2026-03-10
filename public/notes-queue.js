@@ -482,7 +482,7 @@ function updateSchedulePreview() {
         <strong>${activePostsLength} posts</strong> scheduled over 
         <strong>${daysNeeded} day${daysNeeded > 1 ? 's' : ''}</strong> 
         (${startStr} → ${endStr}) • 
-        ${perDay}/day at ${formatHour(hoursStart)}-${formatHour(hoursEnd)}
+        ${perDay}/day at 9AM · 12PM · 6PM
     `;
 }
 

@@ -117,22 +117,12 @@
                         </select>
                     </div>
                     <div class="option-group">
-                        <label for="hours-start">First slot</label>
-                        <select id="hours-start">
-                            <option value="7">7 AM</option>
-                            <option value="8">8 AM</option>
-                            <option value="9" selected>9 AM</option>
-                            <option value="10">10 AM</option>
-                        </select>
-                    </div>
-                    <div class="option-group">
-                        <label for="hours-end">Last slot</label>
-                        <select id="hours-end">
-                            <option value="18">6 PM</option>
-                            <option value="20">8 PM</option>
-                            <option value="21" selected>9 PM</option>
-                            <option value="23">11 PM</option>
-                        </select>
+                        <label>Daily Times</label>
+                        <div style="padding: 8px 12px; background: rgba(0,255,200,0.08); border: 1px solid rgba(0,255,200,0.2); border-radius: 8px; color: #a0f0e0; font-size: 0.85rem; white-space: nowrap;">
+                            9 AM · 12 PM · 6 PM
+                        </div>
+                        <input type="hidden" id="hours-start" value="9">
+                        <input type="hidden" id="hours-end" value="18">
                     </div>
                     <div class="option-group">
                         <label for="export-limit">Post limit</label>
@@ -145,18 +135,6 @@
                             <option value="50">Top 50</option>
                             <option value="100">Top 100</option>
                             <option value="0" selected>All (1000+)</option>
-                        </select>
-                    </div>
-                    <div class="option-group">
-                        <label for="post-interval" title="For Broadcast All to social platforms">Broadcast Interval</label>
-                        <select id="post-interval">
-                            <option value="30" selected>30 seconds (Default)</option>
-                            <option value="60">1 minute</option>
-                            <option value="300">5 minutes</option>
-                            <option value="3600">1 hour</option>
-                            <option value="14400">4 hours</option>
-                            <option value="43200">12 hours</option>
-                            <option value="86400">24 hours</option>
                         </select>
                     </div>
                 </div>
