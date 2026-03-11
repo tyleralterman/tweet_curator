@@ -1669,15 +1669,31 @@ app.post('/api/notes/reorder', (req, res) => {
             return res.status(400).json({ error: 'tweetIds array required' });
         }
 
+        // First, clear queue_order for all broadcast-ready tweets to avoid old order collisions
+        db.prepare(`
+            UPDATE tweets 
+            SET queue_order = NULL 
+            WHERE id IN (
+                SELECT tt.tweet_id 
+                FROM tweet_tags tt 
+                JOIN tags g ON tt.tag_id = g.id 
+                WHERE g.name = 'broadcast-ready'
+            )
+        `).run();
+
         const stmt = db.prepare('UPDATE tweets SET queue_order = ? WHERE id = ?');
         
-        db.transaction(() => {
-            tweetIds.forEach((id, index) => {
-                stmt.run(index, id);
+        let updates = 0;
+        const reorderTx = db.transaction((ids) => {
+            ids.forEach((id, index) => {
+                const result = stmt.run(index, id);
+                updates += result.changes;
             });
-        })();
+        });
 
-        res.json({ success: true });
+        reorderTx(tweetIds);
+
+        res.json({ success: true, updates });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

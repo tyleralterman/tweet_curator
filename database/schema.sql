@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS quoted_tweets (
     is_available BOOLEAN DEFAULT TRUE
 );
 
+-- Background background job queue for external social broadcasting
+CREATE TABLE IF NOT EXISTS broadcast_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tweet_id TEXT NOT NULL,
+    platforms TEXT NOT NULL,
+    scheduled_at DATETIME,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    error_message TEXT
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tweets_created_at ON tweets(created_at);
 CREATE INDEX IF NOT EXISTS idx_tweets_favorite_count ON tweets(favorite_count);

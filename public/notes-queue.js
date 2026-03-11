@@ -398,11 +398,41 @@ async function stopBroadcast() {
 
 async function handleReorder(evt) {
     const items = Array.from(notesList.children);
+    const newOrder = [];
+    
     items.forEach((el, i) => {
         const orderEl = el.querySelector('.note-order');
         if (orderEl) orderEl.textContent = i + 1;
+        newOrder.push(el.dataset.id);
     });
+    
     updateSchedulePreview();
+    
+    // Save new order to backend
+    try {
+        const res = await fetch('/api/notes/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tweetIds: newOrder })
+        });
+        
+        if (!res.ok) throw new Error('Failed to save order');
+        const result = await res.json();
+        
+        // Safety check: ensure number of DB updates matches our expectations
+        if (result.updates !== newOrder.length) {
+            console.warn(`Reorder mismatch: list=${newOrder.length}, updates=${result.updates}`);
+        }
+        
+        // Re-sync local state array to match the DOM
+        const idToIndex = new Map(newOrder.map((id, index) => [id, index]));
+        posts.sort((a, b) => idToIndex.get(a.id) - idToIndex.get(b.id));
+        
+    } catch (err) {
+        showToast('Failed to save new order', 'error');
+        // Re-fetch to restore original order
+        fetchNotes();
+    }
 }
 
 async function removeFromQueue(id) {
