@@ -1661,6 +1661,28 @@ app.delete('/api/notes/remove/:id', (req, res) => {
     }
 });
 
+// Reorder tweets in Notes queue
+app.post('/api/notes/reorder', (req, res) => {
+    try {
+        const { tweetIds } = req.body;
+        if (!Array.isArray(tweetIds)) {
+            return res.status(400).json({ error: 'tweetIds array required' });
+        }
+
+        const stmt = db.prepare('UPDATE tweets SET queue_order = ? WHERE id = ?');
+        
+        db.transaction(() => {
+            tweetIds.forEach((id, index) => {
+                stmt.run(index, id);
+            });
+        })();
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Export Notes queue as YAML for Finn Tropy's Substack Scheduled Notes extension
 app.get('/api/notes/export-yaml', (req, res) => {
     try {
