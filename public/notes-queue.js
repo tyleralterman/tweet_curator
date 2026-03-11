@@ -203,7 +203,6 @@ function renderNotes() {
         animation: 200,
         ghostClass: 'sortable-ghost',
         dragClass: 'sortable-drag',
-        handle: '.note-main',
         onEnd: handleReorder
     });
 }
