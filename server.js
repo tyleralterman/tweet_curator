@@ -2294,10 +2294,16 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
             query += ` LIMIT ${parseInt(exportLimit)}`;
         }
 
-        const tweets = db.prepare(query).all();
+        const allReadyTweets = db.prepare(query).all();
+
+        // Prevent duplicates: filter out tweets that are already pending or processing
+        const activeJobs = db.prepare(`SELECT tweet_id FROM broadcast_queue WHERE status IN ('pending', 'processing')`).all();
+        const activeTweetIds = new Set(activeJobs.map(j => j.tweet_id));
+        
+        let tweets = allReadyTweets.filter(t => !activeTweetIds.has(t.id));
 
         if (tweets.length === 0) {
-            return res.status(400).json({ error: 'No posts in broadcast queue' });
+            return res.status(400).json({ error: 'No new posts to schedule (all ready posts with this limit are already pending)' });
         }
 
         // Scheduling parameters (from frontend dropdowns + browser timezone)
@@ -2724,8 +2730,8 @@ app.delete('/api/broadcast/history/clear', (req, res) => {
         const count = db.prepare('SELECT COUNT(*) as count FROM broadcast_history').get().count;
         db.prepare('DELETE FROM broadcast_history').run();
         
-        // Also reset any 'failed' or 'completed' queue items so they can be re-scheduled
-        const queueReset = db.prepare("DELETE FROM broadcast_queue WHERE status IN ('completed', 'failed')").run();
+        // Reset ALL queue items (pending, processing, completed, failed) so they can be re-scheduled
+        const queueReset = db.prepare("DELETE FROM broadcast_queue").run();
         
         console.log(`🧹 Cleared ${count} broadcast history entries and ${queueReset.changes} old queue items`);
         
