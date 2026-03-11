@@ -139,13 +139,28 @@
                     </div>
                 </div>
                 <div class="schedule-preview" id="schedule-preview"></div>
-                <div class="schedule-actions" style="margin-top: 12px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <button class="btn-test-broadcast" onclick="testBroadcast()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
-                        🧪 Test Top 3
-                    </button>
-                    <button class="btn-broadcast-all" onclick="broadcastAll()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
-                        🚀 Schedule All
-                    </button>
+                <div class="schedule-actions" style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="font-size: 0.85rem; color: #8ba;">⏱️ Test at:</label>
+                        <input type="time" id="test-time" style="padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff; font-size: 0.9rem;">
+                        <button onclick="scheduleTestAtTime()" style="padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; background: #2dd4bf; color: #000;">
+                            📌 Schedule Test
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                        <button onclick="clearBroadcastHistory()" style="padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,80,80,0.3); cursor: pointer; font-weight: 600; background: rgba(255,80,80,0.1); color: #f88;">
+                            🧹 Clear History
+                        </button>
+                        <button onclick="checkQueueStatus()" style="padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); cursor: pointer; font-weight: 600; background: rgba(255,255,255,0.05); color: #aaa;">
+                            📊 Queue Status
+                        </button>
+                        <button class="btn-test-broadcast" onclick="testBroadcast()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
+                            🧪 Test Top 3
+                        </button>
+                        <button class="btn-broadcast-all" onclick="broadcastAll()" style="padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;">
+                            🚀 Schedule All
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

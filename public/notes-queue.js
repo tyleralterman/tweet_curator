@@ -508,3 +508,101 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ============================================
+// Test Scheduling & Queue Management
+// ============================================
+
+async function scheduleTestAtTime() {
+    const timeInput = document.getElementById('test-time');
+    if (!timeInput.value) {
+        showToast('Enter a time first', 'error');
+        return;
+    }
+    
+    if (posts.length === 0) {
+        showToast('No posts in queue', 'error');
+        return;
+    }
+    
+    const platforms = getEnabledPlatforms().filter(p => platformStatus[p]?.connected);
+    if (platforms.length === 0) {
+        showToast('No connected platforms', 'error');
+        return;
+    }
+
+    const firstPost = posts[0];
+    const preview = (firstPost.cleaned_text || firstPost.full_text).substring(0, 60);
+    const platformNames = platforms.map(p => PLATFORMS[p].name).join(', ');
+    
+    if (!confirm(`Schedule top post for ${timeInput.value} to ${platformNames}?\n\n"${preview}..."`)) return;
+    
+    try {
+        const res = await fetch('/api/broadcast/queue/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tweetId: firstPost.id,
+                platforms,
+                scheduledAtLocal: timeInput.value,
+                tzOffsetMinutes: new Date().getTimezoneOffset()
+            })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast(`📌 ${result.message}`, 'success');
+        } else {
+            showToast(`Failed: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+    }
+}
+
+async function clearBroadcastHistory() {
+    if (!confirm('Clear ALL broadcast history? This will reset all platform badges and allow re-broadcasting.')) return;
+    
+    try {
+        const res = await fetch('/api/broadcast/history/clear', { method: 'DELETE' });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast(`🧹 ${result.message}`, 'success');
+            broadcastHistory = {};
+            renderNotes();
+        } else {
+            showToast(`Failed: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+    }
+}
+
+async function checkQueueStatus() {
+    try {
+        const res = await fetch('/api/broadcast/queue/status');
+        const data = await res.json();
+        
+        const s = data.summary;
+        const pendingJobs = data.jobs.filter(j => j.status === 'pending');
+        const pendingList = pendingJobs.slice(0, 5).map(j => 
+            `  • ${j.scheduled_at} — ${(j.full_text || '').substring(0, 50)}...`
+        ).join('\n');
+        
+        alert(
+            `📊 Broadcast Queue Status\n\n` +
+            `Server time: ${s.serverTime}\n` +
+            `SQLite now: ${s.sqliteNow}\n` +
+            `Cron active: ${s.cronActive}\n\n` +
+            `Pending: ${s.pending}\n` +
+            `Processing: ${s.processing}\n` +
+            `Completed: ${s.completed}\n` + 
+            `Failed: ${s.failed}\n` +
+            `Total: ${s.total}\n\n` +
+            (pendingJobs.length > 0 ? `Next pending:\n${pendingList}` : 'No pending jobs')
+        );
+    } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+    }
+}

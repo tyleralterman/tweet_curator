@@ -2644,6 +2644,101 @@ app.get('/api/broadcast/history', (req, res) => {
 });
 
 // ============================================
+// Broadcast Queue Management
+// ============================================
+
+// Get broadcast queue status (diagnostic)
+app.get('/api/broadcast/queue/status', (req, res) => {
+    try {
+        const allJobs = db.prepare(`
+            SELECT bq.*, t.full_text
+            FROM broadcast_queue bq
+            LEFT JOIN tweets t ON bq.tweet_id = t.id
+            ORDER BY bq.scheduled_at ASC
+        `).all();
+        
+        const summary = {
+            total: allJobs.length,
+            pending: allJobs.filter(j => j.status === 'pending').length,
+            processing: allJobs.filter(j => j.status === 'processing').length,
+            completed: allJobs.filter(j => j.status === 'completed').length,
+            failed: allJobs.filter(j => j.status === 'failed').length,
+            cronActive: !!cron,
+            serverTime: new Date().toISOString(),
+            sqliteNow: db.prepare("SELECT datetime('now') as now").get().now
+        };
+        
+        res.json({ summary, jobs: allJobs });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Schedule a single tweet at a specific time for testing
+app.post('/api/broadcast/queue/test', (req, res) => {
+    try {
+        const { tweetId, platforms, scheduledAtLocal, tzOffsetMinutes } = req.body;
+        // scheduledAtLocal: "HH:MM" in user's local time (e.g. "09:37")
+        // tzOffsetMinutes: browser's getTimezoneOffset()
+        
+        if (!tweetId) return res.status(400).json({ error: 'tweetId required' });
+        
+        const tweet = db.prepare('SELECT id, full_text FROM tweets WHERE id = ?').get(tweetId);
+        if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
+        
+        const enabledPlatforms = platforms || ['bluesky', 'linkedin', 'threads'];
+        const tzOffset = parseInt(tzOffsetMinutes) || 240;
+        
+        // Parse local time and convert to UTC
+        const [hours, minutes] = scheduledAtLocal.split(':').map(Number);
+        const now = new Date();
+        const localDate = new Date(now);
+        localDate.setHours(hours, minutes, 0, 0);
+        
+        // Convert local to UTC by adding timezone offset
+        const utcDate = new Date(localDate.getTime() + tzOffset * 60000);
+        const sqliteDate = utcDate.toISOString().replace('T', ' ').replace('.000Z', '');
+        
+        db.prepare(`
+            INSERT INTO broadcast_queue (tweet_id, platforms, scheduled_at, status)
+            VALUES (?, ?, ?, 'pending')
+        `).run(tweetId, JSON.stringify(enabledPlatforms), sqliteDate);
+        
+        const localTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        console.log(`🧪 Test broadcast scheduled: tweet ${tweetId.substring(0, 12)}... at ${localTimeStr} local (${sqliteDate} UTC)`);
+        
+        res.json({ 
+            success: true, 
+            message: `Scheduled for ${localTimeStr} local time (${sqliteDate} UTC)`,
+            tweetPreview: tweet.full_text.substring(0, 80) + '...',
+            platforms: enabledPlatforms
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Clear all broadcast history (reset badges)
+app.delete('/api/broadcast/history/clear', (req, res) => {
+    try {
+        const count = db.prepare('SELECT COUNT(*) as count FROM broadcast_history').get().count;
+        db.prepare('DELETE FROM broadcast_history').run();
+        
+        // Also reset any 'failed' or 'completed' queue items so they can be re-scheduled
+        const queueReset = db.prepare("DELETE FROM broadcast_queue WHERE status IN ('completed', 'failed')").run();
+        
+        console.log(`🧹 Cleared ${count} broadcast history entries and ${queueReset.changes} old queue items`);
+        
+        res.json({ 
+            success: true, 
+            message: `Cleared ${count} history entries and ${queueReset.changes} old queue items` 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
 // Static Files & Catch-all
 // ============================================
 
@@ -3517,12 +3612,17 @@ app.listen(PORT, () => {
 
         const processBroadcastQueue = async () => {
             try {
+                const sqliteNow = db.prepare("SELECT datetime('now') as now").get().now;
+                
                 // Find all pending posts whose time has passed
                 const pendingPosts = db.prepare(`
                     SELECT * FROM broadcast_queue 
                     WHERE status = 'pending' AND replace(scheduled_at, 'T', ' ') <= datetime('now')
                     ORDER BY scheduled_at ASC
                 `).all();
+                
+                const totalPending = db.prepare("SELECT COUNT(*) as c FROM broadcast_queue WHERE status = 'pending'").get().c;
+                console.log(`⏰ Cron check @ ${sqliteNow} UTC | ${pendingPosts.length} due now, ${totalPending} total pending`);
 
                 if (pendingPosts.length === 0) return;
 
