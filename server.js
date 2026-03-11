@@ -1296,7 +1296,7 @@ app.get('/api/scheduler/queue', (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'blog-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `;
         const tweets = db.prepare(query).all();
 
@@ -1611,7 +1611,7 @@ app.get('/api/notes/queue', (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `;
         const tweets = db.prepare(query).all();
 
@@ -1698,7 +1698,7 @@ app.get('/api/notes/export-yaml', (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `;
 
         if (exportLimit > 0) {
@@ -1801,7 +1801,7 @@ app.get('/api/notes/preview-export', (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `;
 
         if (exportLimit > 0) {
@@ -1893,7 +1893,7 @@ app.post('/api/broadcast/bluesky/batch', async (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `).all();
 
         if (tweets.length === 0) {
@@ -2309,7 +2309,7 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
             JOIN tweet_tags tt ON t.id = tt.tweet_id
             JOIN tags g ON tt.tag_id = g.id
             WHERE g.name = 'broadcast-ready'
-            ORDER BY t.queue_order ASC, t.created_at DESC
+            ORDER BY t.queue_order IS NULL ASC, t.queue_order ASC, t.created_at DESC
         `;
 
         if (exportLimit && parseInt(exportLimit) > 0) {
