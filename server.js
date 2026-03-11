@@ -1617,8 +1617,8 @@ app.get('/api/notes/queue', (req, res) => {
 
         // Clean the text
         tweets.forEach(t => {
-            // Use full_text only (not combined_text) to avoid including full thread
-            t.cleaned_text = cleanContent(t.blog_text || t.full_text);
+            // Use full_text only for broadcasts (first tweet only, cleaned at broadcast time)
+            t.cleaned_text = cleanContent(t.full_text);
         });
 
         res.json(tweets);
@@ -2046,7 +2046,7 @@ app.post('/api/broadcast/threads/:id', async (req, res) => {
         }
 
         // Threads has 500 char limit
-        let text = cleanContent(tweet.blog_text || tweet.full_text);
+        let text = cleanContent(tweet.full_text);
         if (text.length > 500) {
             text = text.substring(0, 497) + '...';
         }
@@ -2159,7 +2159,7 @@ app.post('/api/broadcast/instagram/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        const text = cleanContent(tweet.blog_text || tweet.full_text);
+        const text = cleanContent(tweet.full_text);
 
         const api = new InstagramAPI();
         const result = await api.postQuoteCard(text, text, id);
@@ -2179,7 +2179,7 @@ app.get('/api/broadcast/instagram/preview/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        const text = cleanContent(tweet.blog_text || tweet.full_text);
+        const text = cleanContent(tweet.full_text);
 
         const api = new InstagramAPI();
         const imagePath = await api.generateQuoteCard(text, 'Tyler Alterman', id);
@@ -2511,8 +2511,8 @@ app.post('/api/broadcast/multi/:id', async (req, res) => {
         const tweet = db.prepare('SELECT full_text, combined_text, blog_text FROM tweets WHERE id = ?').get(id);
         if (!tweet) return res.status(404).json({ error: 'Tweet not found' });
 
-        // Use full_text instead of combined_text to avoid thread truncation on social platforms
-        const text = cleanContent(tweet.blog_text || tweet.full_text);
+        // Use full_text (first tweet only) — cleanContent handles twitterism cleanup
+        const text = cleanContent(tweet.full_text);
         const results = {};
 
         const logBroadcast = (platform, success, postId, errorMsg) => {
@@ -3639,7 +3639,7 @@ app.listen(PORT, () => {
                     }
 
                     const platforms = JSON.parse(job.platforms);
-                    const text = cleanContent(tweet.blog_text || tweet.full_text);
+                    const text = cleanContent(tweet.full_text);
                     let allSuccess = true;
                     let errorMessages = [];
 
