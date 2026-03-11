@@ -1617,7 +1617,8 @@ app.get('/api/notes/queue', (req, res) => {
 
         // Clean the text
         tweets.forEach(t => {
-            t.cleaned_text = cleanContent(t.combined_text || t.full_text);
+            // Use full_text only (not combined_text) to avoid including full thread
+            t.cleaned_text = cleanContent(t.blog_text || t.full_text);
         });
 
         res.json(tweets);
@@ -1710,19 +1711,28 @@ app.get('/api/notes/export-yaml', (req, res) => {
             // Format: YYYY-MM-DDTHH:mm (without seconds)
             const scheduledAt = scheduledDate.toISOString().slice(0, 16);
 
-            const text = cleanContent(tweet.combined_text || tweet.full_text);
+            // Use full_text only (not combined_text) to avoid including full thread
+            const text = cleanContent(tweet.blog_text || tweet.full_text);
             const timestamp = Date.now();
             const randomSuffix = Math.random().toString(36).substring(2, 15);
+
+            // Split text into paragraphs on newlines to preserve linebreaks in Substack
+            const paragraphs = text.split(/\n+/).filter(p => p.trim());
+            const deltaOps = paragraphs.map(p => ({ insert: p + '\n' }));
+            const bodyParagraphs = paragraphs.map(p => ({
+                content: [{ text: p, type: 'text' }],
+                type: 'paragraph'
+            }));
 
             return {
                 airtableId: null,
                 content: {
-                    delta: { ops: [{ insert: text + '\n' }] },
+                    delta: { ops: deltaOps },
                     json: {
                         attachmentIds: [],
                         bodyJson: {
                             attrs: { schemaVersion: 'v1' },
-                            content: [{ content: [{ text: text, type: 'text' }], type: 'paragraph' }],
+                            content: bodyParagraphs,
                             type: 'doc'
                         },
                         replyMinimumRole: 'everyone'
@@ -2337,7 +2347,7 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
         };
 
         // Also respect any existing pending items — don't double-book
-        const latestQuery = db.prepare(`SELECT MAX(scheduled_at) as latest FROM broadcast_queue WHERE status IN ('pending', 'processing')`).get();
+        const latestQuery = db.prepare(`SELECT MAX(replace(scheduled_at, 'T', ' ')) as latest FROM broadcast_queue WHERE status IN ('pending', 'processing')`).get();
         let scheduleAfter = daysOffset > 0 ? startDate : now;
         if (latestQuery.latest) {
             const latestExisting = new Date(latestQuery.latest);
@@ -2357,7 +2367,9 @@ app.post('/api/broadcast/multi/batch', async (req, res) => {
         db.transaction(() => {
             for (let i = 0; i < tweets.length; i++) {
                 const tweet = tweets[i];
-                insertStmt.run(tweet.id, JSON.stringify(platforms), currentSlot.toISOString());
+                // Store in SQLite-compatible datetime format (space separator, no ms/Z)
+                const sqliteDate = currentSlot.toISOString().replace('T', ' ').replace('.000Z', '');
+                insertStmt.run(tweet.id, JSON.stringify(platforms), sqliteDate);
                 if (i === 0) firstSlot = new Date(currentSlot);
                 lastSlot = new Date(currentSlot);
                 currentSlot = getNextValidSlot(currentSlot);
@@ -3508,7 +3520,7 @@ app.listen(PORT, () => {
                 // Find all pending posts whose time has passed
                 const pendingPosts = db.prepare(`
                     SELECT * FROM broadcast_queue 
-                    WHERE status = 'pending' AND scheduled_at <= datetime('now')
+                    WHERE status = 'pending' AND replace(scheduled_at, 'T', ' ') <= datetime('now')
                     ORDER BY scheduled_at ASC
                 `).all();
 
